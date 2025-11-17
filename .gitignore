@@ -1,0 +1,25 @@
+# Python caches
+__pycache__/
+*.pyc
+
+# Environments
+.venv/
+venv/
+
+# Secrets
+.env
+
+# Logs and temp
+logs/
+tmp/
+
+# Data caches
+data/.cache/
+
+# Jupyter
+notebooks/
+.ipynb_checkpoints/
+
+# OS/filesystem
+.DS_Store
+Thumbs.db
