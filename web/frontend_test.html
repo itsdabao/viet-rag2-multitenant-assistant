@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html lang="vi">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>NovaRAG Studio – Viet RAG2 Multitenant Assistant</title>
+    <meta
+      name="description"
+      content="NovaRAG Studio – landing page & live demo cho Viet RAG2 Multitenant Assistant, trợ lý AI tiếng Việt dựa trên RAG 2.0 và multi-tenant."
+    />
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <!-- HEADER -->
+    <header class="site-header">
+      <div class="site-header__inner">
+        <a href="#hero" class="logo"> NOVARAG<span class="logo__dot">•</span>STUDIO </a>
+        <nav class="nav">
+          <ul class="nav__list">
+            <li><a href="#hero" class="nav__link">Sản phẩm</a></li>
+            <li><a href="#highlights" class="nav__link">Ưu điểm</a></li>
+            <li><a href="#features" class="nav__link">Tính năng</a></li>
+            <li><a href="#workflow" class="nav__link">Cách hoạt động</a></li>
+            <li><a href="#usecases" class="nav__link">Ứng dụng</a></li>
+            <li><a href="#demo" class="nav__link">Demo</a></li>
+          </ul>
+          <a href="#demo" class="btn btn--primary nav__cta">Demo</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <!-- HERO -->
+      <section id="hero" class="hero">
+        <div class="container hero__inner js-reveal">
+          <div class="hero__content">
+            <div class="hero__eyebrow">Viet RAG2 Multitenant Assistant</div>
+            <h1 class="hero__title">
+              Biến tài liệu nội bộ thành câu trả lời tức thì bằng AI tiếng Việt.
+            </h1>
+            <p class="hero__subtitle">
+              NovaRAG Studio giúp bạn xây dựng trợ lý RAG 2.0 đa tenant trên nền tảng LlamaIndex +
+              Qdrant + Gemini – tối ưu cho tài liệu nội bộ, trung tâm anh ngữ và doanh nghiệp.
+            </p>
+            <ul class="hero__bullets">
+              <li><span class="hero__dot"></span> Hybrid search (vector + BM25) cho độ chính xác cao.</li>
+              <li><span class="hero__dot"></span> Multi-tenant tách biệt dữ liệu từng trung tâm/khách hàng.</li>
+              <li><span class="hero__dot"></span> Streaming WebSocket chat mượt mà, trải nghiệm giống ChatGPT.</li>
+            </ul>
+            <div class="hero__actions">
+              <a href="#demo" class="btn btn--primary">Demo</a>
+              <a href="#workflow" class="btn btn--ghost">Xem cách hoạt động</a>
+            </div>
+            <div class="hero__trust">
+              <div class="hero__avatars">
+                <div class="hero__avatar">BP</div>
+                <div class="hero__avatar">ES</div>
+                <div class="hero__avatar">FE</div>
+              </div>
+              <span>Đang thử nghiệm với nhiều trung tâm đào tạo & doanh nghiệp nội bộ.</span>
+            </div>
+          </div>
+
+          <aside class="hero__mock" aria-hidden="true">
+            <div class="hero__mock-header">
+              <div class="hero__mock-dots">
+                <span class="hero__mock-dot"></span>
+                <span class="hero__mock-dot"></span>
+                <span class="hero__mock-dot"></span>
+              </div>
+              <div class="hero__mock-pill">Viet RAG2 – Live Preview</div>
+            </div>
+            <div class="hero__mock-search">
+              <span>Q:</span>
+              <span>Chính sách hoàn tiền khóa học online là gì?</span>
+              <span class="hero__cursor"></span>
+            </div>
+            <div class="hero__mock-list">
+              <div class="hero__mock-item">
+                <div class="hero__mock-item-header">
+                  <div class="hero__mock-name">BrightPath Academy</div>
+                  <div class="hero__mock-tag">tenant_brightpathacademy.pdf</div>
+                </div>
+                <div class="hero__mock-meta">Trích từ mục "Quy định hoàn phí" · độ khớp cao</div>
+              </div>
+              <div class="hero__mock-item">
+                <div class="hero__mock-item-header">
+                  <div class="hero__mock-name">FlexEnglish</div>
+                  <div class="hero__mock-tag">tenant_flexenglish.pdf</div>
+                </div>
+                <div class="hero__mock-meta">Điều kiện hoàn tiền trước ngày khai giảng</div>
+              </div>
+              <div class="hero__mock-item">
+                <div class="hero__mock-item-header">
+                  <div class="hero__mock-name">NovaRAG Studio</div>
+                  <div class="hero__mock-tag">Hybrid · Rerank</div>
+                </div>
+                <div class="hero__mock-meta">
+                  Kết hợp Qdrant + BM25 · rerank theo cosine để chọn 3 đoạn tốt nhất.
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <!-- HIGHLIGHTS -->
+      <section id="highlights" class="section section--dark">
+        <div class="container js-reveal">
+          <div class="section__header section__header--center">
+            <div class="section__eyebrow">Vì sao đồ án này nổi bật</div>
+            <h2>Highlights of NovaRAG Studio</h2>
+            <p>
+              Tập trung vào việc đưa RAG 2.0 vào thực tế: dễ triển khai, dễ demo, dễ mở rộng cho nhiều
+              khách hàng khác nhau.
+            </p>
+          </div>
+          <div class="highlights-grid">
+            <article class="highlight-card">
+              <div class="highlight-card__icon">⚡</div>
+              <h3>Hybrid retrieval & rerank</h3>
+              <p>
+                Kết hợp Qdrant vector search và BM25 lexical, sau đó rerank theo cosine để chọn ngữ
+                cảnh tốt nhất cho LLM.
+              </p>
+            </article>
+            <article class="highlight-card">
+              <div class="highlight-card__icon">🏷️</div>
+              <h3>Multi-tenant by design</h3>
+              <p>
+                Mỗi tenant được gắn metadata và filter riêng, dễ mở rộng cho nhiều trung tâm/khách
+                hàng chỉ với một hạ tầng.
+              </p>
+            </article>
+            <article class="highlight-card">
+              <div class="highlight-card__icon">🧩</div>
+              <h3>CLI + API + WebSocket</h3>
+              <p>
+                Có đủ đường: ingest & query qua CLI, API HTTP chuẩn, demo chat streaming qua WebSocket
+                để present dễ dàng.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- FEATURES -->
+      <section id="features" class="section section--light">
+        <div class="container js-reveal">
+          <div class="section__header">
+            <div class="section__eyebrow">Key features</div>
+            <h2>Tính năng nổi bật của Viet RAG2</h2>
+            <p>
+              Thiết kế xoay quanh pipeline RAG 2.0: ingest thống nhất, hybrid retrieval, rerank, prompt
+              in-context và interface linh hoạt.
+            </p>
+          </div>
+          <div class="features-layout">
+            <div class="features-visual">
+              <div class="features-visual__inner">
+                <div>
+                  <p class="section__eyebrow">RAG Engine</p>
+                  <h3>Pipeline rõ ràng, dễ debug</h3>
+                  <p style="font-size: 0.9rem; color: #9ca3af;">
+                    Ingest → Chunk → Embed → Qdrant → Hybrid + Rerank → Prompt in-context → Gemini. Mỗi
+                    bước đều được log & có thể test riêng.
+                  </p>
+                </div>
+                <p style="font-size: 0.78rem; color: #64748b;">
+                  File chính:
+                  <code>src/ingest_pipeline.py</code>,
+                  <code>src/incontext_ralm.py</code>,
+                  <code>src/rag_engine.py</code>
+                </p>
+              </div>
+            </div>
+            <div class="features-text-list">
+              <div class="feature-line">
+                <div class="feature-line__icon">📊</div>
+                <div class="feature-line__text">
+                  <h3>Embedding & Vector Store chuẩn</h3>
+                  <p>
+                    Sử dụng BAAI/bge-m3 trên CPU, lưu vào Qdrant với dimension 1024, distance cosine –
+                    tối ưu cho câu hỏi tiếng Việt.
+                  </p>
+                </div>
+              </div>
+              <div class="feature-line">
+                <div class="feature-line__icon">🧠</div>
+                <div class="feature-line__text">
+                  <h3>In-context RALM</h3>
+                  <p>
+                    Chọn few-shot theo similarity, kết hợp lịch sử hội thoại, clamp độ dài prompt để
+                    tối ưu chi phí nhưng vẫn giữ ngữ cảnh.
+                  </p>
+                </div>
+              </div>
+              <div class="feature-line">
+                <div class="feature-line__icon">🔌</div>
+                <div class="feature-line__text">
+                  <h3>FastAPI backend sẵn sàng tích hợp</h3>
+                  <p>
+                    Endpoint <code>/query</code> cho HTTP, <code>/ws/query</code> cho streaming – dễ
+                    gắn vào front-end bất kỳ hoặc sản phẩm khác.
+                  </p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- WORKFLOW -->
+      <section id="workflow" class="section section--dark">
+        <div class="container js-reveal">
+          <div class="section__header section__header--center">
+            <div class="section__eyebrow">How it works</div>
+            <h2>Pipeline hoạt động từ đầu đến cuối</h2>
+          </div>
+          <div class="workflow">
+            <article class="workflow-step">
+              <div class="workflow-step__badge">1</div>
+              <h3>Ingest tài liệu</h3>
+              <p>Đọc PDF/DOCX/TXT, chunk nội dung với SentenceSplitter và lưu metadata (tenant_id, nguồn).</p>
+            </article>
+            <article class="workflow-step">
+              <div class="workflow-step__badge">2</div>
+              <h3>Hybrid retrieve & rerank</h3>
+              <p>
+                Vector search từ Qdrant + BM25 trên corpus đã chunk, sau đó rerank theo cosine để chọn
+                top vài đoạn quan trọng nhất.
+              </p>
+            </article>
+            <article class="workflow-step">
+              <div class="workflow-step__badge">3</div>
+              <h3>Prompt & Streaming</h3>
+              <p>
+                Prompt in-context (system + history + context), gửi tới Gemini, stream kết quả qua
+                WebSocket tới front-end.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- USE CASES -->
+      <section id="usecases" class="section section--light">
+        <div class="container js-reveal">
+          <div class="section__header section__header--center">
+            <div class="section__eyebrow">Use-case scenarios</div>
+            <h2>Những kịch bản triển khai thực tế</h2>
+          </div>
+          <div class="usecases-grid">
+            <article class="usecase">
+              <h3>🎓 Trung tâm anh ngữ & giáo dục</h3>
+              <p>
+                Trả lời câu hỏi về khóa học, lịch học, học phí, quy định bảo lưu dựa trên tài liệu nội
+                bộ từng trung tâm.
+              </p>
+            </article>
+            <article class="usecase">
+              <h3>🏢 Doanh nghiệp & HR</h3>
+              <p>
+                Bot nội bộ cho nhân viên tra cứu nhanh chính sách phúc lợi, quy trình, hướng dẫn sử
+                dụng hệ thống – giảm tải cho HR.
+              </p>
+            </article>
+            <article class="usecase">
+              <h3>🧾 Quy chế & pháp chế</h3>
+              <p>
+                Tìm kiếm theo ngữ nghĩa trong hàng ngàn trang quy định nội bộ, biên bản, sổ tay – chỉ
+                cần đặt câu hỏi bằng tiếng Việt tự nhiên.
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <!-- DEMO -->
+      <section id="demo" class="section section--dark">
+        <div class="container js-reveal">
+          <div class="section__header section__header--center">
+            <div class="section__eyebrow">Demo</div>
+            <h2>Trải nghiệm live demo ngay trên trình duyệt</h2>
+            <p>
+              Backend FastAPI + WebSocket đã chạy sẵn. Hãy chọn tenant và đặt câu hỏi, câu trả lời sẽ
+              stream dần giống ChatGPT.
+            </p>
+          </div>
+          <div class="demo-layout">
+            <div class="demo-panel">
+              <div class="demo-panel__header">
+                <span style="font-size: 0.85rem; color: #9ca3af;">Cấu hình truy vấn</span>
+                <span id="statusLabel" class="demo-panel__status-label status-idle"
+                  >Sẵn sàng</span
+                >
+              </div>
+              <form class="demo-form" onsubmit="return false;">
+                <div class="form-group">
+                  <label for="tenantId">Tenant ID</label>
+                  <input
+                    id="tenantId"
+                    type="text"
+                    placeholder="vd: brightpathacademy"
+                    value="brightpathacademy"
+                  />
+                </div>
+                <div class="form-group">
+                  <label for="userQuestion">Câu hỏi của bạn</label>
+                  <textarea
+                    id="userQuestion"
+                    placeholder="vd: Chính sách hoàn tiền khóa học online là gì?"
+                  ></textarea>
+                </div>
+                <button id="btnAsk" class="btn btn--primary">Hỏi trợ lý</button>
+              </form>
+            </div>
+            <div class="demo-panel">
+              <div class="demo-panel__header">
+                <span style="font-size: 0.85rem; color: #9ca3af;">Kết quả trả về</span>
+              </div>
+              <div id="answerContainer" class="demo-output">
+                <p class="demo-output__placeholder">
+                  Câu trả lời sẽ xuất hiện tại đây sau khi bạn đặt câu hỏi…
+                </p>
+              </div>
+              <div id="sourcesContainer" class="demo-sources"></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+      <div class="container footer__inner">
+        <span>&copy; 2025 NovaRAG Studio · Viet RAG2 Multitenant Assistant.</span>
+        <div class="footer__links">
+          <a href="#">Privacy</a>
+          <a href="#">Terms</a>
+          <a href="#">Support</a>
+        </div>
+      </div>
+    </footer>
+
+    <script src="appjs.js"></script>
+  </body>
+</html>
+

@@ -1,0 +1,43 @@
+[
+  {
+    "id": "greeting",
+    "questions": ["chào", "xin chào", "hello", "hi", "chào bạn", "chào em", "chào anh", "chào chị"],
+    "answer": "Dạ em chào anh/chị ạ. Em là trợ lý tư vấn của trung tâm. Anh/chị đang quan tâm khóa học nào (Giao tiếp/IELTS/TOEIC/Thiếu nhi) để em tư vấn nhanh nhất ạ?"
+  },
+  {
+    "id": "how_are_you",
+    "questions": ["bạn khỏe không", "em khỏe không", "dạo này thế nào", "bạn thế nào", "bạn ổn không", "how are you"],
+    "answer": "Dạ em vẫn ổn ạ. Em có thể hỗ trợ anh/chị hỏi về khóa học, học phí, lịch học, ưu đãi hoặc kiểm tra đầu vào. Anh/chị muốn hỏi nội dung nào ạ?"
+  },
+  {
+    "id": "who_are_you",
+    "questions": ["bạn là ai", "em là ai", "ai đang nói", "ai vậy", "bạn tên gì", "em tên gì", "who are you"],
+    "answer": "Dạ em là trợ lý AI của trung tâm, hỗ trợ giải đáp thông tin và thu thập nhu cầu để tư vấn lộ trình phù hợp. Anh/chị muốn em tư vấn khóa học nào ạ?"
+  },
+  {
+    "id": "who_am_i",
+    "questions": ["tôi là ai", "anh là ai", "chị là ai", "bạn biết tôi là ai không", "em biết tôi là ai không"],
+    "answer": "Dạ hiện tại em chưa có thông tin của anh/chị. Nếu anh/chị cho em xin **họ tên** và **số điện thoại**, em sẽ ghi nhận để tư vấn chính xác hơn ạ."
+  },
+  {
+    "id": "thanks",
+    "questions": ["cảm ơn", "thanks", "thank you", "cám ơn em", "cảm ơn bạn", "ok cảm ơn"],
+    "answer": "Dạ em cảm ơn anh/chị ạ. Nếu anh/chị muốn em tư vấn nhanh, anh/chị cho em xin SĐT để đội ngũ tư vấn liên hệ hỗ trợ chi tiết hơn nhé."
+  },
+  {
+    "id": "bye",
+    "questions": ["tạm biệt", "bye", "chào nhé", "hẹn gặp lại"],
+    "answer": "Dạ em chào anh/chị ạ. Khi cần tư vấn thêm về khóa học hoặc ưu đãi, anh/chị nhắn em bất cứ lúc nào nhé."
+  },
+  {
+    "id": "capabilities",
+    "questions": ["bạn làm được gì", "em làm được gì", "bạn có thể làm gì", "em có thể làm gì", "help", "giúp gì"],
+    "answer": "Dạ em có thể: (1) trả lời thông tin khóa học/học phí/lịch học/ưu đãi dựa trên tài liệu của trung tâm, (2) gợi ý lộ trình học, (3) ghi nhận nhu cầu và SĐT để tư vấn viên liên hệ. Anh/chị đang quan tâm khóa nào ạ?"
+  },
+  {
+    "id": "handoff_human",
+    "questions": ["tư vấn viên", "gặp người thật", "nói chuyện với người", "gọi cho tôi", "liên hệ tư vấn", "có ai tư vấn không"],
+    "answer": "Dạ được ạ. Anh/chị cho em xin **SĐT** và **khung giờ thuận tiện**, em sẽ chuyển cho tư vấn viên liên hệ hỗ trợ ngay ạ."
+  }
+]
+

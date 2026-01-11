@@ -1,9 +1,17 @@
+import sys
 import argparse
 import logging
 from pathlib import Path
 import re
-from src.ingest_pipeline import run_ingestion
-from src.config import DATA_PATH
+
+# Đảm bảo import được gói src/* khi chạy từ thư mục scripts/
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from app.services.ingestion import run_ingestion
+from app.core.config import DATA_PATH
+from app.core.bootstrap import bootstrap_embeddings_only
 
 logging.basicConfig(
     filename="logs/ingest.log",
@@ -24,7 +32,19 @@ def _derive_tenant_from_filename(path: Path) -> str:
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Ingest pipeline")
     parser.add_argument("--tenant", default=None, help="Tenant ID (gắn vào metadata)")
+    parser.add_argument("--branch", default=None, help="Branch ID (tuỳ chọn, gắn vào metadata)")
     parser.add_argument("--file", default=None, help="Đường dẫn file đơn lẻ để ingest")
+    parser.add_argument(
+        "--pdf-engine",
+        choices=["auto", "llamaparse", "simple"],
+        default="auto",
+        help="Cách đọc PDF: auto (có key thì LlamaParse), llamaparse, hoặc simple",
+    )
+    parser.add_argument(
+        "--no-md-elements",
+        action="store_true",
+        help="Tắt MarkdownElementNodeParser (fallback SentenceSplitter)",
+    )
     parser.add_argument(
         "--auto-from-filenames",
         action="store_true",
@@ -33,6 +53,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
+        bootstrap_embeddings_only()
         if args.auto_from_filenames:
             base = Path(DATA_PATH)
             if not base.exists():
@@ -47,13 +68,30 @@ if __name__ == "__main__":
             for fp in files:
                 tenant = _derive_tenant_from_filename(fp)
                 print(f"\n[Auto] Ingest tenant={tenant} file={fp}")
-                run_ingestion(tenant_id=tenant, input_files=[str(fp)])
+                run_ingestion(
+                    tenant_id=tenant,
+                    branch_id=args.branch,
+                    input_files=[str(fp)],
+                    pdf_engine=args.pdf_engine,
+                    use_markdown_element_parser=not args.no_md_elements,
+                )
             print("\nIngest hàng loạt hoàn tất.")
         else:
             if args.file:
-                run_ingestion(tenant_id=args.tenant, input_files=[args.file])
+                run_ingestion(
+                    tenant_id=args.tenant,
+                    branch_id=args.branch,
+                    input_files=[args.file],
+                    pdf_engine=args.pdf_engine,
+                    use_markdown_element_parser=not args.no_md_elements,
+                )
             else:
-                run_ingestion(tenant_id=args.tenant)
+                run_ingestion(
+                    tenant_id=args.tenant,
+                    branch_id=args.branch,
+                    pdf_engine=args.pdf_engine,
+                    use_markdown_element_parser=not args.no_md_elements,
+                )
             print("Ingest hoàn tất.")
     except Exception as e:
         logging.error(f"Lỗi khi ingest: {e}")

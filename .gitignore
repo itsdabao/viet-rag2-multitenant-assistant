@@ -16,6 +16,15 @@ tmp/
 # Data caches
 data/.cache/
 
+# Raw tenant data (do not commit)
+data/knowledge_base/*
+!data/knowledge_base/.gitkeep
+data/*.pdf
+data/*.docx
+data/*.jpg
+data/*.png
+data/*.xlsx
+
 # Jupyter
 notebooks/
 .ipynb_checkpoints/
@@ -23,3 +32,11 @@ notebooks/
 # OS/filesystem
 .DS_Store
 Thumbs.db
+
+# Office temp files
+~$*
+
+# Docs/binaries (keep repo light; avoid leaking customer data)
+RoadMap.docx
+docs/*.pdf
+docs/*.docx
