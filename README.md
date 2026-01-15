@@ -7,6 +7,7 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 - Ingest tài liệu (PDF, DOCX, TXT, MD, RTF) vào Qdrant bằng LlamaIndex.
 - Hybrid retrieval: kết hợp vector search (Qdrant) và BM25 trên corpus đã chunk.
 - Rerank nhẹ bằng cosine giữa truy vấn và context (có thể bật/tắt qua config).
+- Smalltalk + out-of-domain guard: trả lời hội thoại đơn giản và chặn câu hỏi ngoài phạm vi để giảm số lần gọi LLM (cấu hình trong `app/core/config.py`, dữ liệu tại `app/resources/smalltalk_vi.json` và `app/resources/domain_anchors_vi.json`).
 - Hỗ trợ multi‑tenant thông qua metadata `tenant_id` khi ingest và query.
 - Giao diện CLI hỏi‑đáp và backend FastAPI với endpoint `/query`.
 
@@ -21,6 +22,19 @@ Khuyến nghị tạo môi trường ảo riêng (ví dụ conda):
 Tạo file `.env` ở root:
 
 ```bash
+# (Optional) ép provider để tránh tự fallback sang Gemini/OpenAI
+LLM_PROVIDER=groq
+
+# Primary (recommended): Groq (OpenAI-compatible)
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_BASE_URL=https://api.groq.com/openai/v1
+# Groq được gọi qua OpenAI-compatible endpoint `GROQ_BASE_URL` (cách 2).
+
+# Optional: LlamaParse (Modern Ingestion cho PDF phức tạp)
+# LLAMA_CLOUD_API_KEY=your_llama_cloud_key_here
+
+# Optional fallback: Gemini
 GOOGLE_API_KEY=your_google_api_key_here
 GEMINI_MODEL=gemini-2.5-flash-lite
 ```
@@ -33,21 +47,27 @@ Chạy Qdrant bằng Docker:
 docker run -p 6333:6333 qdrant/qdrant
 ```
 
-Mặc định code trỏ tới `localhost:6333` (có thể chỉnh trong `src/config.py`).
+Mặc định code trỏ tới `localhost:6333` (có thể chỉnh trong `app/core/config.py`).
 
 ## 3. Ingest dữ liệu
 
 Ingest toàn bộ file trong `data/knowledge_base`:
 
 ```bash
-python ingest.py --auto-from-filenames
+python scripts/ingest.py --auto-from-filenames
 ```
 
 - Tên file dạng `tenant_*.pdf` sẽ được suy ra `tenant_id`.
 - Hoặc ingest thủ công:
 
 ```bash
-python ingest.py --tenant brightpathacademy --file data/knowledge_base/tenant_brightpathacademy.pdf
+python scripts/ingest.py --tenant brightpathacademy --file data/knowledge_base/tenant_brightpathacademy.pdf
+```
+
+Nếu PDF có bảng biểu/phức tạp và bạn có `LLAMA_CLOUD_API_KEY`, có thể bật LlamaParse:
+
+```bash
+python scripts/ingest.py --pdf-engine llamaparse --tenant brightpathacademy --file data/knowledge_base/tenant_brightpathacademy.pdf
 ```
 
 ## 4. Chạy CLI hỏi‑đáp
@@ -55,7 +75,7 @@ python ingest.py --tenant brightpathacademy --file data/knowledge_base/tenant_br
 Sau khi ingest và Qdrant đã chạy:
 
 ```bash
-python query.py --mode hybrid_rerank --tenant brightpathacademy
+python scripts/query.py --mode hybrid_rerank --tenant brightpathacademy
 ```
 
 - Gõ câu hỏi, `exit` để thoát, `/reset` để xoá lịch sử hội thoại.
@@ -69,7 +89,7 @@ python query.py --mode hybrid_rerank --tenant brightpathacademy
 Khởi động backend:
 
 ```bash
-uvicorn api:app --reload --port 8000
+uvicorn app.api.main:app --reload --port 8000
 ```
 
 Truy cập:
@@ -80,6 +100,7 @@ Truy cập:
 {
   "question": "Trung tâm BrightPath có những chương trình nào?",
   "tenant_id": "brightpathacademy",
+  "branch_id": null,
   "history": []
 }
 ```
@@ -102,9 +123,10 @@ Backend sẽ trả:
 - `src/lexical_bm25.py` – triển khai BM25 và hybrid retrieval.
 - `src/incontext_ralm.py` – logic RAG 2.0 + few-shot + rerank cosine.
 - `src/rag_engine.py` – “trái tim” RAG dùng chung cho CLI và backend.
-- `ingest.py` – script CLI để ingest dữ liệu.
-- `query.py` – CLI chat với RAG.
-- `api.py` – FastAPI backend (healthcheck + `/query`).
+- `scripts/ingest.py` – CLI để ingest dữ liệu.
+- `scripts/query.py` – CLI chat với RAG.
+- `app/api/main.py` – FastAPI backend (healthcheck + `/query`).
+- `web/` – frontend demo (HTML/CSS/JS).
 
 ## 7. Ghi chú phát triển
 

@@ -16,6 +16,15 @@ tmp/
 # Data caches
 data/.cache/
 
+# Raw tenant data (do not commit)
+data/knowledge_base/*
+!data/knowledge_base/.gitkeep
+data/*.pdf
+data/*.docx
+data/*.jpg
+data/*.png
+data/*.xlsx
+
 # Jupyter
 notebooks/
 .ipynb_checkpoints/
@@ -24,8 +33,13 @@ notebooks/
 .DS_Store
 Thumbs.db
 
-# Bỏ qua thư mục dữ liệu Qdrant
-qdrant_data/
+# Office temp files
+~$*
 
-# Bỏ qua các file ảnh/doc nặng (tùy bạn quyết định, nhưng thường data nên để riêng)
-data/
+# Docs/binaries (keep repo light; avoid leaking customer data)
+RoadMap.docx
+docs/*.pdf
+docs/*.docx
+
+# Qdrant data
+qdrant_data/

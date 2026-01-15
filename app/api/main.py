@@ -1,13 +1,14 @@
+import asyncio
 import logging
 import time
-import asyncio
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from src.rag_engine import init_llm_from_env, build_index, rag_query
+from app.core.bootstrap import bootstrap_runtime
+from app.services.rag_service import build_index, rag_query
 
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ app.add_middleware(
 class QueryRequest(BaseModel):
     question: str
     tenant_id: Optional[str] = None
+    branch_id: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
 
 
@@ -43,7 +45,7 @@ def startup_event() -> None:
         format="%(asctime)s %(levelname)s: %(message)s",
     )
     logger.info("Starting RAG backend...")
-    init_llm_from_env()
+    bootstrap_runtime()
     build_index()
     logger.info("RAG backend is ready.")
 
@@ -59,13 +61,15 @@ def query_endpoint(payload: QueryRequest) -> QueryResponse:
     result = rag_query(
         question=payload.question,
         tenant_id=payload.tenant_id,
+        branch_id=payload.branch_id,
         history=payload.history or [],
     )
     elapsed_ms = (time.perf_counter() - start) * 1000.0
     sources = result.get("sources", []) or []
     logger.info(
-        "query tenant=%s len_q=%d time_ms=%.1f sources=%d",
+        "query tenant=%s branch=%s len_q=%d time_ms=%.1f sources=%d",
         payload.tenant_id or "-",
+        payload.branch_id or "-",
         len(payload.question or ""),
         elapsed_ms,
         len(sources),
@@ -97,19 +101,20 @@ async def websocket_query(ws: WebSocket) -> None:
             data = await ws.receive_json()
             question = (data.get("question") or "").strip()
             tenant_id = data.get("tenant_id")
+            branch_id = data.get("branch_id")
             history = data.get("history") or []
             if not question:
                 await ws.send_json({"type": "error", "message": "Câu hỏi trống."})
                 continue
 
             start = time.perf_counter()
-            # Gọi RAG trong thread riêng để tránh lỗi asyncio.run() bên trong LLM
             loop = asyncio.get_running_loop()
             result = await loop.run_in_executor(
                 None,
                 lambda: rag_query(
                     question=question,
                     tenant_id=tenant_id,
+                    branch_id=branch_id,
                     history=history,
                 ),
             )
@@ -118,14 +123,14 @@ async def websocket_query(ws: WebSocket) -> None:
             sources = result.get("sources", []) or []
 
             logger.info(
-                "ws_query tenant=%s len_q=%d time_ms=%.1f sources=%d",
+                "ws_query tenant=%s branch=%s len_q=%d time_ms=%.1f sources=%d",
                 tenant_id or "-",
+                branch_id or "-",
                 len(question),
                 elapsed_ms,
                 len(sources),
             )
 
-            # Gửi meta trước
             await ws.send_json(
                 {
                     "type": "meta",
@@ -134,7 +139,6 @@ async def websocket_query(ws: WebSocket) -> None:
                 }
             )
 
-            # Stream answer theo từng đoạn nhỏ để tạo cảm giác "gõ dần"
             chunk_size = 40
             if not answer:
                 await ws.send_json({"type": "chunk", "text": "(Không có câu trả lời) "})
@@ -142,7 +146,6 @@ async def websocket_query(ws: WebSocket) -> None:
                 for i in range(0, len(answer), chunk_size):
                     chunk = answer[i : i + chunk_size]
                     await ws.send_json({"type": "chunk", "text": chunk})
-                    # Delay nhỏ cho UX, có thể giảm/tăng hoặc bỏ đi
                     await asyncio.sleep(0.03)
 
             await ws.send_json({"type": "end"})
@@ -154,14 +157,3 @@ async def websocket_query(ws: WebSocket) -> None:
             await ws.send_json({"type": "error", "message": str(e)})
         except Exception:
             pass
-
-
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-
-# Sau app = FastAPI(...)
-app.mount("/static", StaticFiles(directory="."), name="static")
-
-@app.get("/")
-def serve_frontend():
-    return FileResponse("frontend_test.html")

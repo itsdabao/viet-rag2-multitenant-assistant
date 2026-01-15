@@ -1,0 +1,57 @@
+# requirements.lock.txt
+#
+# Pinned dependency set for this project to keep dev/prod environments reproducible.
+# Install:
+#   python -m pip install -r requirements.lock.txt
+#
+# Notes:
+# - protobuf MUST stay < 6 due to Google Gemini + grpcio-status constraints.
+# - If your environment already has tensorflow/keras installed and you hit Transformers TF/Keras errors,
+#   either uninstall tensorflow/keras or run with: TRANSFORMERS_NO_TF=1
+
+# --- API ---
+fastapi==0.115.6
+uvicorn==0.32.1
+pydantic==2.12.3
+python-dotenv==1.1.1
+httpx==0.28.1
+
+# --- LlamaIndex (RAG framework) ---
+llama-index==0.14.5
+llama-index-core==0.14.5
+llama-index-embeddings-huggingface==0.6.1
+llama-index-llms-google-genai==0.6.2
+llama-index-llms-openai==0.6.5
+llama-index-vector-stores-qdrant==0.8.6
+llama-index-readers-file==0.5.4
+# Modern ingestion (PDF complex -> Markdown)
+llama-index-readers-llama-parse==0.5.1
+llama-parse==0.6.54
+
+# --- LLM provider (Gemini) ---
+google-genai==1.46.0
+google-ai-generativelanguage==0.6.15
+
+# --- Vector DB client (Qdrant) ---
+# Use the grpc extra to ensure grpcio is present.
+qdrant-client[grpc]==1.15.1
+
+# --- Embeddings / ML stack ---
+sentence-transformers==5.1.1
+transformers==4.57.1
+torch==2.9.0
+numpy==2.2.3
+scikit-learn==1.7.2
+scipy==1.16.2
+
+# --- OpenAI-compatible client (optional; not required for Groq wrapper) ---
+openai==1.109.1
+
+# --- Compatibility pins (avoid common runtime import errors) ---
+protobuf>=5.26.1,<6
+grpcio==1.76.0
+grpcio-status==1.71.2
+wrapt==1.17.3
+
+# --- Optional (Windows only) ---
+pywin32==311; platform_system == "Windows"

@@ -1,3 +1,4 @@
+# docker-compose up -d
 services:
   # Định nghĩa dịch vụ Database Qdrant
   qdrant-db:
@@ -8,7 +9,7 @@ services:
       - "6334:6334" # Mở cổng GRPC (cho hiệu năng cao sau này)
     volumes:
       # Ánh xạ thư mục lưu dữ liệu.
-      # Bên trái (./qdrant_data): Thư mục trên máy tính của bạn (nó sẽ tự tạo ra)
+      # Bên trái (./qdrant_data): Thư mục trên máy tính
       # Bên phải (/qdrant/storage): Thư mục trong container
       - ./qdrant_data:/qdrant/storage
     restart: no # Tự khởi động lại nếu bị crash hoặc restart máy

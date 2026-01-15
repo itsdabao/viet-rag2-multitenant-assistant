@@ -16,9 +16,9 @@ if sys.platform == 'win32':
 root_dir = Path(__file__).parent
 sys.path.insert(0, str(root_dir))
 
-from src.config import DATA_PATH, CHUNK_SIZE, CHUNK_OVERLAP
-from src.data_loader import load_documents
-from src.chunking_strategies import TextNormalizer, DocumentBasedParser, get_node_parser
+from app.core.config import DATA_PATH, CHUNK_SIZE, CHUNK_OVERLAP
+from app.services.documents import load_documents
+from app.services.chunking import TextNormalizer, DocumentBasedParser, get_node_parser
 from llama_index.core import Document
 from llama_index.core.node_parser import SentenceSplitter
 

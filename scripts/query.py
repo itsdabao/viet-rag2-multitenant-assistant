@@ -1,15 +1,17 @@
 import sys
 import logging
 import argparse
+import traceback
 from pathlib import Path
 
-# Đảm bảo import được gói src/* khi chạy trực tiếp file này
+# Đảm bảo import được gói src/* khi chạy từ thư mục scripts/
 REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-import src.config as cfg
-from src.rag_engine import init_llm_from_env, build_index, rag_query
+import app.core.config as cfg
+from app.core.bootstrap import bootstrap_runtime
+from app.services.rag_service import build_index, rag_query
 
 
 def init_logging() -> None:
@@ -31,6 +33,7 @@ def main() -> None:
         help="Chế độ: vector | hybrid | hybrid_rerank",
     )
     parser.add_argument("--tenant", default=None, help="Tenant ID để lọc dữ liệu truy hồi")
+    parser.add_argument("--branch", default=None, help="Branch ID (tuỳ chọn) để lọc theo chi nhánh")
     args = parser.parse_args()
 
     # Ghi đè cấu hình theo cờ tối giản
@@ -51,12 +54,14 @@ def main() -> None:
     print("Đang khởi tạo. Vui lòng chờ...")
 
     try:
-        init_llm_from_env()
+        bootstrap_runtime()
         build_index()
         print('--- Sẵn sàng. Nhập câu hỏi (gõ "exit" để thoát, gõ "/reset" để xoá lịch sử) ---')
 
         if args.tenant:
             print(f"Tenant: {args.tenant}")
+        if args.branch:
+            print(f"Branch: {args.branch}")
         history: list[dict] = []
         while True:
             user_query = input("\nBạn hỏi: ")
@@ -71,6 +76,7 @@ def main() -> None:
             result = rag_query(
                 user_query,
                 tenant_id=args.tenant,
+                branch_id=args.branch,
                 history=history,
             )
 
@@ -86,9 +92,15 @@ def main() -> None:
             history.append({"role": "user", "content": user_query})
             history.append({"role": "assistant", "content": str(result.get("answer", ""))})
     except Exception as e:
-        print(f"Đã xảy ra lỗi: {e}")
+        # Một số Exception có message rỗng -> in repr + traceback để debug dễ hơn.
+        msg = str(e).strip()
+        if msg:
+            print(f"Đã xảy ra lỗi: {msg}")
+        else:
+            print(f"Đã xảy ra lỗi: {type(e).__name__}: {repr(e)}")
+        if args.debug or not msg:
+            traceback.print_exc()
 
 
 if __name__ == "__main__":
     main()
-
