@@ -21,8 +21,29 @@ DATA_PATH = str(Path("data") / "knowledge_base")
 NODES_CACHE_PATH = str(Path("data") / ".cache" / "nodes.jsonl")
 
 # Chunking (shared for ingest and BM25 fallback)
+# Options: "fixed_size", "document_based" (structure-based với ##/###), "semantic"
+CHUNKING_STRATEGY = "document_based"  # "document_based" = Structure-based với Markdown ##/###
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
+
+# Document-based (Structure-based) chunking settings
+# Chia theo cấu trúc Markdown: ## (Section) và ### (Sub-section)
+# Context Injection: Sub-section ### sẽ tự động có tiêu đề cha ## ở đầu
+#
+# === CHUNK SIZE RECOMMENDATIONS ===
+# MIN_CHUNK_SIZE: Khuyến nghị >= 350 chars vì:
+#   1. Chunks quá nhỏ (<200) không đủ context cho LLM hiểu
+#   2. Embedding quality giảm với text quá ngắn (thiếu semantic information)
+#   3. Tăng số lượng chunks làm chậm retrieval và tăng noise
+#   4. Mỗi chunk cần đủ thông tin để "độc lập" trả lời câu hỏi
+#
+# MAX_CHUNK_SIZE: Khuyến nghị 1000-2000 chars vì:
+#   1. Quá dài sẽ dilute relevant information
+#   2. Embedding models có giới hạn tokens hiệu quả
+#   3. Context window của LLM có limite
+#
+DOC_BASED_MIN_CHUNK_SIZE = 350  # Tăng từ 200 để đảm bảo đủ context
+DOC_BASED_MAX_CHUNK_SIZE = 1500  # Kích thước tối đa của mỗi chunk
 
 # In-Context RALM
 FEWSHOT_PATH = str(Path("src") / "eval" / "test_case.json")

@@ -7,20 +7,51 @@ from src.embedding_model import setup_embedding
 from src.config import DATA_PATH
  
 def run_ingestion(tenant_id: Optional[str] = None, input_files: Optional[List[str]] = None):
-    # New: chunk with SentenceSplitter, index nodes, and dump nodes cache
-    from llama_index.core.node_parser import SentenceSplitter
+    """
+    Ingest documents into vector store with configurable chunking strategy.
+    
+    Args:
+        tenant_id: Optional tenant identifier for multi-tenancy
+        input_files: Optional list of specific files to ingest
+    """
     import os, json
-    from src.config import CHUNK_SIZE, CHUNK_OVERLAP, NODES_CACHE_PATH
+    from src.config import CHUNKING_STRATEGY, NODES_CACHE_PATH
+    from src.chunking_strategies import get_node_parser
 
-    print("Starting ingestion pipeline ...")
+    print("=" * 60)
+    print("Starting ingestion pipeline...")
+    print(f"📋 Chunking Strategy: {CHUNKING_STRATEGY}")
+    print("=" * 60)
 
     setup_embedding()
     client = init_qdrant_collection()
     storage_context = get_storage_context(client)
 
     documents = load_documents(DATA_PATH, input_files=input_files)
-    node_parser = SentenceSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+    print(f"📄 Loaded {len(documents)} document(s) from PDF pages")
+    
+    # Merge all pages/documents into a single document for better chunking
+    # PDF pages are loaded as separate documents, but we want to process as one
+    if len(documents) > 1:
+        # Get metadata from first document
+        first_meta = documents[0].metadata.copy() if hasattr(documents[0], 'metadata') else {}
+        
+        # Merge all text
+        all_texts = [doc.get_content() for doc in documents]
+        merged_text = "\n\n".join(all_texts)
+        
+        # Create single merged document
+        from llama_index.core import Document as LIDocument
+        merged_doc = LIDocument(text=merged_text, metadata=first_meta)
+        documents = [merged_doc]
+        print(f"📎 Merged into 1 document ({len(merged_text):,} chars)")
+    
+    # Sử dụng node parser theo strategy được config
+    node_parser = get_node_parser(strategy=CHUNKING_STRATEGY)
+    print(f"🔧 Using parser: {type(node_parser).__name__}")
+    
     nodes = node_parser.get_nodes_from_documents(documents)
+    print(f"✂️  Created {len(nodes)} chunk(s)")
 
     # Attach tenant_id to node metadata if provided
     if tenant_id:

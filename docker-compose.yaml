@@ -1,0 +1,16 @@
+services:
+  # Định nghĩa dịch vụ Database Qdrant
+  qdrant-db:
+    image: qdrant/qdrant:latest  # Tải bản mới nhất
+    container_name: qdrant_container # Đặt tên cho dễ quản lý
+    ports:
+      - "6333:6333" # Mở cổng API (HTTP)
+      - "6334:6334" # Mở cổng GRPC (cho hiệu năng cao sau này)
+    volumes:
+      # Ánh xạ thư mục lưu dữ liệu.
+      # Bên trái (./qdrant_data): Thư mục trên máy tính của bạn (nó sẽ tự tạo ra)
+      # Bên phải (/qdrant/storage): Thư mục trong container
+      - ./qdrant_data:/qdrant/storage
+    restart: no # Tự khởi động lại nếu bị crash hoặc restart máy
+    environment:
+      - QDRANT__SERVICE__ENABLE_STATIC_CONTENT=1 # Cho phép xem Dashboard

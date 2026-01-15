@@ -23,3 +23,9 @@ notebooks/
 # OS/filesystem
 .DS_Store
 Thumbs.db
+
+# Bỏ qua thư mục dữ liệu Qdrant
+qdrant_data/
+
+# Bỏ qua các file ảnh/doc nặng (tùy bạn quyết định, nhưng thường data nên để riêng)
+data/
