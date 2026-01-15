@@ -81,6 +81,17 @@ NODES_CACHE_PATH = str(PROJECT_ROOT / "data" / ".cache" / "nodes.jsonl")
 CHUNK_SIZE = 800
 CHUNK_OVERLAP = 100
 
+# Chunking strategy settings
+# Options: "fixed_size", "document_based"
+CHUNKING_STRATEGY = "document_based"
+
+# Document-based (Structure-based) chunking settings
+# Chia theo cấu trúc Markdown: ## (Section) và ### (Sub-section)
+# Context Injection: Sub-section ### sẽ tự động có tiêu đề cha ## ở đầu
+DOC_BASED_MIN_CHUNK_SIZE = 350
+DOC_BASED_MAX_CHUNK_SIZE = 1500
+DOC_BASED_AUTO_NORMALIZE = True
+
 # In-Context RALM
 FEWSHOT_PATH = str(PROJECT_ROOT / "app" / "resources" / "eval" / "fewshot_examples.json")
 RETRIEVAL_TOP_K = 5 

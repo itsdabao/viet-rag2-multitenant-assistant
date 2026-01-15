@@ -40,3 +40,6 @@ Thumbs.db
 RoadMap.docx
 docs/*.pdf
 docs/*.docx
+
+# Qdrant data
+qdrant_data/

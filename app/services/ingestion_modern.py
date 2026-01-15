@@ -127,15 +127,49 @@ def load_documents_for_ingestion(
     return documents
 
 
-def build_nodes_for_ingestion(documents, *, chunk_size: int, chunk_overlap: int, use_markdown_elements: bool):
+def build_nodes_for_ingestion(
+    documents,
+    *,
+    chunk_size: int,
+    chunk_overlap: int,
+    use_markdown_elements: bool,
+    chunking_strategy: str = "fixed_size"
+):
     """
     Build nodes with structure preservation when possible.
 
+    - If chunking_strategy is "document_based", use DocumentBasedParser with auto-normalize
     - If markdown element parser is available and enabled, parse into elements first.
     - Then chunk large nodes with SentenceSplitter to keep chunk size stable.
     """
     from llama_index.core.node_parser import SentenceSplitter
 
+    # Handle document-based (structure-based) chunking
+    if chunking_strategy == "document_based":
+        from app.services.chunking import DocumentBasedParser
+        from llama_index.core import Document as LIDocument
+        from app.core.config import DOC_BASED_MIN_CHUNK_SIZE, DOC_BASED_MAX_CHUNK_SIZE, DOC_BASED_AUTO_NORMALIZE
+
+        # Merge all documents into a single document for better structure-based chunking
+        if len(documents) > 1:
+            first_meta = documents[0].metadata.copy() if hasattr(documents[0], 'metadata') else {}
+            all_texts = [doc.get_content() for doc in documents]
+            merged_text = "\n\n".join(all_texts)
+            merged_doc = LIDocument(text=merged_text, metadata=first_meta)
+            documents = [merged_doc]
+            print(f"Merged into 1 document ({len(merged_text):,} chars)")
+
+        # Use DocumentBasedParser
+        parser = DocumentBasedParser(
+            min_chunk_size=DOC_BASED_MIN_CHUNK_SIZE,
+            max_chunk_size=DOC_BASED_MAX_CHUNK_SIZE,
+            auto_normalize=DOC_BASED_AUTO_NORMALIZE,
+        )
+        nodes = parser.get_nodes_from_documents(documents)
+        print(f"Using DocumentBasedParser: {len(nodes)} chunk(s)")
+        return nodes
+
+    # Fixed-size chunking (default)
     splitter = SentenceSplitter(chunk_size=chunk_size, chunk_overlap=chunk_overlap)
 
     nodes = None
@@ -173,4 +207,5 @@ def build_nodes_for_ingestion(documents, *, chunk_size: int, chunk_overlap: int,
         except Exception:
             out.append(n)
     return out
+
 

@@ -16,10 +16,11 @@ def run_ingestion(
     use_markdown_element_parser: bool = True,
 ):
     import os, json
-    from app.core.config import CHUNK_SIZE, CHUNK_OVERLAP, NODES_CACHE_PATH
+    from app.core.config import CHUNK_SIZE, CHUNK_OVERLAP, NODES_CACHE_PATH, CHUNKING_STRATEGY
     from app.services.ingestion_modern import IngestionOptions, load_documents_for_ingestion, build_nodes_for_ingestion
 
     print("Starting ingestion pipeline ...")
+    print(f"Chunking Strategy: {CHUNKING_STRATEGY}")
 
     if Settings.embed_model is None:
         setup_embedding()
@@ -33,6 +34,7 @@ def run_ingestion(
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         use_markdown_elements=use_markdown_element_parser,
+        chunking_strategy=CHUNKING_STRATEGY,
     )
 
     # Attach tenant/branch metadata if provided
