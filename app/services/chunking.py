@@ -500,7 +500,7 @@ def get_node_parser(strategy: str = "fixed_size") -> NodeParser:
     elif strategy == "semantic":
         # Semantic splitting requires embedding model, có thể implement sau
         # Fallback to fixed_size for now
-        print("⚠️ Semantic chunking chưa được implement, dùng fixed_size thay thế.")
+        print("Semantic chunking chưa được implement, dùng fixed_size thay thế.")
         return SentenceSplitter(
             chunk_size=CHUNK_SIZE,
             chunk_overlap=CHUNK_OVERLAP

@@ -157,7 +157,7 @@ def build_nodes_for_ingestion(
             merged_text = "\n\n".join(all_texts)
             merged_doc = LIDocument(text=merged_text, metadata=first_meta)
             documents = [merged_doc]
-            print(f"📎 Merged into 1 document ({len(merged_text):,} chars)")
+            print(f"Merged into 1 document ({len(merged_text):,} chars)")
 
         # Use DocumentBasedParser
         parser = DocumentBasedParser(
@@ -166,7 +166,7 @@ def build_nodes_for_ingestion(
             auto_normalize=DOC_BASED_AUTO_NORMALIZE,
         )
         nodes = parser.get_nodes_from_documents(documents)
-        print(f"🔧 Using DocumentBasedParser: {len(nodes)} chunk(s)")
+        print(f"Using DocumentBasedParser: {len(nodes)} chunk(s)")
         return nodes
 
     # Fixed-size chunking (default)

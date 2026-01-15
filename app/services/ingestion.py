@@ -20,7 +20,7 @@ def run_ingestion(
     from app.services.ingestion_modern import IngestionOptions, load_documents_for_ingestion, build_nodes_for_ingestion
 
     print("Starting ingestion pipeline ...")
-    print(f"📋 Chunking Strategy: {CHUNKING_STRATEGY}")
+    print(f"Chunking Strategy: {CHUNKING_STRATEGY}")
 
     if Settings.embed_model is None:
         setup_embedding()
