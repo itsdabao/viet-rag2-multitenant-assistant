@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Tuple
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -28,8 +31,8 @@ def _load_env() -> None:
         from dotenv import load_dotenv
 
         load_dotenv()
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug("ingestion_modern: failed to load .env: %s", e)
 
 
 def _split_files(data_path: str, input_files: Optional[List[str]]) -> List[Path]:
@@ -68,7 +71,8 @@ def _llamaparse_load_pdf(path: Path, *, result_type: str, language: str):
         parser = LlamaParse(api_key=api_key, result_type=result_type, language=language)
         docs = parser.load_data(str(path))
         return docs
-    except Exception:
+    except Exception as e:
+        logger.debug("ingestion_modern: llama_parse SDK failed for %s: %s (fallback to LlamaParseReader)", path, e)
         from llama_index.readers.llama_parse import LlamaParseReader  # type: ignore
 
         reader = LlamaParseReader(api_key=api_key, result_type=result_type, language=language)
@@ -122,8 +126,8 @@ def load_documents_for_ingestion(
                 md.setdefault("source", pdf.name)
                 try:
                     d.metadata = md
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug("ingestion_modern: failed to set metadata for %s: %s", pdf.name, e)
             documents.extend(parsed)
     elif pdfs:
         documents.extend(_simple_reader_load(pdfs))

@@ -1,12 +1,15 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 from llama_index.core import Settings
+
+logger = logging.getLogger(__name__)
 
 
 def _cosine(a: np.ndarray, b: np.ndarray) -> float:
@@ -54,12 +57,14 @@ class SmalltalkMatcher:
         if not self.path or not os.path.exists(self.path):
             self._items = []
             self._q_embeddings = []
+            logger.debug("smalltalk: no data file at %s", self.path)
             return
 
         try:
             with open(self.path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.debug("smalltalk: failed to load %s: %s", self.path, e)
             data = []
 
         items: List[Dict[str, object]] = []
@@ -83,7 +88,8 @@ class SmalltalkMatcher:
             for q in it["questions"]:
                 try:
                     self._q_embeddings.append((str(it["id"]), q, _embed(q)))
-                except Exception:
+                except Exception as e:
+                    logger.debug("smalltalk: embed failed for item=%s: %s", it.get("id"), e)
                     continue
 
     def match(self, query: str, *, threshold: float) -> Optional[SmalltalkHit]:

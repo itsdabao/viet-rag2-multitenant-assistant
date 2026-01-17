@@ -14,6 +14,7 @@ from app.core.config import (
     RETRIEVAL_TOP_K,
 )
 from app.core.bootstrap import bootstrap_embeddings_only
+from app.core.bootstrap import bootstrap_runtime
 from app.core.llama import init_llm_from_env
 from app.services.retrieval.vector_store import init_qdrant_collection
 from app.services.agentic.service import agentic_query
@@ -61,6 +62,8 @@ def rag_query(
     """
     Hàm tiện ích RAG dùng chung cho CLI và backend.
     """
+    # Make sure `.env` is loaded and `Settings.llm` is initialized even when startup skipped RAG init.
+    bootstrap_runtime()
     index = build_index()
     if tenant_id and (session_id or user_id):
         return memory_rag_query(

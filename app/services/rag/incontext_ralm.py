@@ -38,6 +38,7 @@ from app.core.config import (
     DOMAIN_KEYWORDS,
     DOMAIN_COSINE_THRESHOLD,
     OUT_OF_DOMAIN_MESSAGE,
+    NO_MATCH_MESSAGE,
     BRANCH_FIELD,
     ENABLE_BRANCH_FILTER,
     ENFORCE_METADATA_FILTERS,
@@ -385,6 +386,9 @@ def query_with_incontext_ralm(
     branch_id: str | None = None,
     history: List[Dict[str, str]] | None = None,
 ):
+    def _no_match() -> Dict[str, object]:
+        return {"answer": NO_MATCH_MESSAGE, "sources": []}
+
     # 0) Smalltalk shortcut (avoid retrieval + LLM)
     if ENABLE_SMALLTALK:
         hit = _SMALLTALK.match(user_query, threshold=SMALLTALK_COSINE_THRESHOLD)
@@ -529,7 +533,9 @@ def query_with_incontext_ralm(
         if fused and best_cosine is not None:
             _dbg_block([f"Domain guard: best_cosine={best_cosine:.3f} threshold={DOMAIN_COSINE_THRESHOLD:.3f}"])
             if float(best_cosine) < float(DOMAIN_COSINE_THRESHOLD):
-                return {"answer": OUT_OF_DOMAIN_MESSAGE, "sources": []}
+                # Query is likely in-domain (passed the anchor/keyword precheck) but retrieval evidence is weak.
+                # Prefer a "no matching info" message over "out of domain" to avoid confusing users.
+                return _no_match()
 
     # Clamp exact top-N contexts for the prompt (post-rerank)
     selected = fused[: max(0, min(PROMPT_TOP_CONTEXTS, len(fused)))]
@@ -561,7 +567,7 @@ def query_with_incontext_ralm(
     # Build prompt and call LLM
     # Guardrail: if no context and no examples, avoid calling LLM
     if not retrieved_texts and not examples:
-        return {"answer": OUT_OF_DOMAIN_MESSAGE, "sources": []}
+        return _no_match()
 
     prompt = build_prompt(user_query, examples, retrieved_texts, history=history)
     if DEBUG_SHOW_PROMPT:
@@ -586,9 +592,11 @@ def query_with_incontext_ralm(
             else:
                 if LLM_FALLBACK_TO_CONTEXT_ON_ERROR:
                     msg = str(e)
-                    is_quota = ("RESOURCE_EXHAUSTED" in msg) or ("429" in msg) or ("quota" in msg.lower())
+                    msg_l = msg.lower()
+                    is_quota = ("RESOURCE_EXHAUSTED" in msg) or ("429" in msg) or ("quota" in msg_l)
+                    is_auth = ("401" in msg) or ("invalid_api_key" in msg_l) or ("api key" in msg_l) or ("apikey" in msg_l)
                     # Provide a best-effort fallback without calling LLM again.
-                    if is_quota:
+                    if is_quota or is_auth:
                         snippets = []
                         for t in retrieved_texts[:3]:
                             if not t:
@@ -596,12 +604,13 @@ def query_with_incontext_ralm(
                             snippets.append(t[:LLM_FALLBACK_CONTEXT_SNIPPET_CHARS])
                         if snippets:
                             answer_text = (
-                                "Dạ hiện tại hệ thống đang tạm thời không gọi được LLM (hết hạn mức/quota). "
-                                "Em gửi anh/chị các đoạn thông tin liên quan nhất em tìm được trong tài liệu:\n\n"
+                                "Dạ hiện tại hệ thống đang tạm thời không gọi được LLM "
+                                + ("(API key không hợp lệ)." if is_auth else "(hết hạn mức/quota).")
+                                + " Em gửi anh/chị các đoạn thông tin liên quan nhất em tìm được trong tài liệu:\n\n"
                                 + "\n\n---\n\n".join(snippets)
                             )
                         else:
-                            answer_text = OUT_OF_DOMAIN_MESSAGE
+                            answer_text = OUT_OF_DOMAIN_MESSAGE if not is_auth else NO_MATCH_MESSAGE
 
                         sources: List[str] = []
                         for r in fused:

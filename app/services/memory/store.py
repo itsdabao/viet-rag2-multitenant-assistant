@@ -4,7 +4,7 @@ import time
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import JSON, Column, String, Text, TIMESTAMP, create_engine, func, select
+from sqlalchemy import JSON, Column, Index, String, Text, TIMESTAMP, create_engine, func, select
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Session, declarative_base
 
@@ -22,7 +22,10 @@ class ChatSession(Base):
     entity_memory = Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=dict)
     rolling_summary = Column(Text, nullable=True)
     recent_messages_buffer = Column(JSONB().with_variant(JSON(), "sqlite"), nullable=False, default=list)
-    updated_at = Column(TIMESTAMP(timezone=False), server_default=func.current_timestamp(), onupdate=func.current_timestamp())
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    updated_at = Column(TIMESTAMP(timezone=True), server_default=func.now(), onupdate=func.now())
+
+    __table_args__ = (Index("idx_chat_sessions_tenant", "tenant_id"),)
 
 
 _ENGINE = None
@@ -136,4 +139,3 @@ def merge_entity_memory(base: Dict[str, Any], patch: Dict[str, Any]) -> Dict[str
         else:
             out[k] = v
     return out
-

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import unicodedata
 from dataclasses import dataclass
@@ -8,6 +9,8 @@ from typing import List, Optional, Tuple
 
 import numpy as np
 from llama_index.core import Settings
+
+logger = logging.getLogger(__name__)
 
 
 def _strip_accents(s: str) -> str:
@@ -62,12 +65,14 @@ class DomainGuard:
         if not self.anchors_path or not os.path.exists(self.anchors_path):
             self._anchors = []
             self._embs = []
+            logger.debug("domain_guard: no anchors file at %s", self.anchors_path)
             return
 
         try:
             with open(self.anchors_path, "r", encoding="utf-8") as f:
                 data = json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.debug("domain_guard: failed to load %s: %s", self.anchors_path, e)
             data = []
 
         anchors = [a for a in data if isinstance(a, str) and a.strip()] if isinstance(data, list) else []
@@ -76,7 +81,8 @@ class DomainGuard:
         for a in anchors:
             try:
                 self._embs.append((a, _embed(a)))
-            except Exception:
+            except Exception as e:
+                logger.debug("domain_guard: embed failed for anchor=%s: %s", a, e)
                 continue
 
     def decide(self, query: str, *, threshold: float) -> DomainDecision:

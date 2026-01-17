@@ -1,0 +1,12 @@
+.demo-layout {
+  margin-top: 10px;
+}
+
+.demo-output {
+  max-height: 420px;
+}
+
+textarea#userQuestion {
+  min-height: 120px;
+}
+

@@ -21,6 +21,7 @@ Mục tiêu: phát triển sản phẩm chatbot thương mại, hỗ trợ **tư
 - Guardrails: chống prompt injection cơ bản + lọc nội dung độc hại + scope check (trong/ngoài trung tâm).
 - CRM tối thiểu: lưu lead + lịch sử hội thoại + trạng thái xử lý (new/contacted/qualified/closed).
 - Admin tối thiểu: upload tài liệu theo tenant/chi nhánh, cấu hình prompt/brand/giờ hoạt động, xem logs.
+- Owner Console (local-first): dashboard/logs/handoffs toàn hệ thống + auth hardcode qua env + JWT cookie (`/owner/*`).
 - Vận hành: Docker Compose (app + Qdrant + DB), secrets qua env, backup/restore.
 
 ### Multi-tenant + Multi-branch (xử lý cả 2 trường hợp)

@@ -21,6 +21,7 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 - **FastAPI** (`app/api/main.py`): cung cấp HTTP endpoint `/query` và các endpoint admin (`/admin/api/*`).
 - **WebSocket** (`/ws/query`): stream câu trả lời theo chunk để web demo có trải nghiệm giống ChatGPT.
 - **CORS middleware**: cho phép web demo gọi API trong môi trường dev.
+- **Web apps (web tĩnh)**: Agent Chat (`/agent`) và Owner Console (`/owner`) được serve bởi backend.
 
 ### 2) LlamaIndex (RAG framework / orchestration)
 - **VectorStoreIndex + Settings**: chuẩn hoá cách load vector store, embeddings, LLM, và gọi pipeline RAG.
@@ -29,7 +30,7 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 
 ### 3) Qdrant (Vector Database)
 - **Qdrant** (`localhost:6333`): lưu vector embeddings + payload metadata.
-- **Payload filter**: bắt buộc lọc theo `metadata.tenant_id` (và `metadata.branch_id` nếu bật) để đảm bảo cô lập dữ liệu SaaS.
+- **Payload filter**: bắt buộc lọc theo `tenant_id` (và `branch_id` nếu bật) để đảm bảo cô lập dữ liệu SaaS.
 
 ### 4) Embedding Model: `BAAI/bge-m3`
 - Vai trò: biến text thành vector 1024‑d (cosine) để truy vấn ngữ nghĩa trên Qdrant.
@@ -76,6 +77,8 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 ### 12) Web UI (HTML/CSS/JS thuần)
 - `web/frontend_test.html` + `web/appjs.js`: landing + live demo streaming (WebSocket), có session_id (memory), feedback (👍/👎), hiển thị trace/route.
 - `web/admin.html` + `web/admin.js`: dashboard KPI + logs + handoffs theo tenant.
+- `web/agent.html` + `web/agent.js`: Agent Chat UI (tối giản, streaming).
+- `web/owner.html` + `web/owner.js`: Owner Console UI (dashboard/logs/handoffs, login bằng env + JWT cookie).
 
 ### 13) Evaluation (Day 8)
 - `scripts/eval_day8.py`: chạy golden set, cheap checks (tenant leakage, calculator consistency…), optional RAGAS.
@@ -97,12 +100,14 @@ Tạo file `.env` ở root:
 ```bash
 # Postgres (Day 6–7 memory + Day 9 dashboard)
 DATABASE_URL=postgresql+psycopg2://admin:123@localhost:5432/agent_memory
+# Hoặc dùng SQLite cho local dev (nhanh, không cần Postgres):
+# DATABASE_URL=sqlite:///./data/agent.db
 
 # (Optional) ép provider để tránh tự fallback sang Gemini/OpenAI
 LLM_PROVIDER=groq
 
 # Primary (recommended): Groq (OpenAI-compatible)
-GROQ_API_KEY=your_groq_api_key_here
+GROQ_API_KEY=gsk_your_real_key_here  # không để dấu nháy, không cắt ngắn
 GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 # Groq được gọi qua OpenAI-compatible endpoint `GROQ_BASE_URL` (cách 2).
@@ -113,6 +118,16 @@ GROQ_BASE_URL=https://api.groq.com/openai/v1
 # Optional fallback: Gemini
 GOOGLE_API_KEY=your_google_api_key_here
 GEMINI_MODEL=gemini-2.5-flash-lite
+
+# --- Owner Console (local-first) ---
+OWNER_USERNAME=owner
+OWNER_PASSWORD=owner_password_here
+JWT_SECRET=change_me_to_a_long_random_string
+# Optional (minutes), default 1440 (1 day)
+JWT_EXPIRE_MIN=1440
+
+# Optional: chỉ bật Owner UI, bỏ qua init RAG/LLM khi startup
+# RAG_INIT_ON_STARTUP=0
 ```
 
 ## 2. Chạy Qdrant
@@ -170,8 +185,11 @@ uvicorn app.api.main:app --reload --port 8000
 
 Truy cập:
 - Docs tự động: `http://localhost:8000/docs`
+- Agent Chat (WebSocket streaming): `http://localhost:8000/agent`
+- Owner Console (login + dashboard/logs/handoffs): `http://localhost:8000/owner`
 - Admin Dashboard (Day 9): `http://localhost:8000/admin`
 - Web demo (landing + streaming chat): `http://localhost:8000/static/frontend_test.html`
+- Root mặc định sẽ redirect về Agent Chat: `http://localhost:8000/`
 - Test nhanh endpoint `/query` với body mẫu:
 
 ```json
@@ -195,6 +213,10 @@ Backend sẽ trả:
   "route": "course_search"
 }
 ```
+
+### Ghi chú về LLM API key
+- Nếu `GROQ_API_KEY`/`GOOGLE_API_KEY` sai hoặc thiếu, hệ thống vẫn có thể retrieve được context nhưng không gọi được LLM (thường báo 401/invalid_api_key).
+- Muốn chat trả lời đầy đủ: cần API key hợp lệ trong `.env` và restart `uvicorn`.
 
 ## 6. Cấu trúc thư mục
 

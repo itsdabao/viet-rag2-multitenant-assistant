@@ -8,6 +8,14 @@ from qdrant_client.http.models import Distance
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
+try:
+    from dotenv import load_dotenv
+
+    # Load repo-root `.env` so env-driven settings work even when `cwd` is different.
+    load_dotenv(dotenv_path=str(PROJECT_ROOT / ".env"))
+except Exception:
+    pass
+
 # Prompt templates
 SYSTEM_PROMPT_PATH = str(PROJECT_ROOT / "app" / "resources" / "prompts" / "system_vi.md")
 
@@ -25,6 +33,12 @@ DOMAIN_ANCHORS_PATH = str(PROJECT_ROOT / "app" / "resources" / "domain_anchors_v
 DOMAIN_ANCHOR_COSINE_THRESHOLD = 0.25
 DOMAIN_KEYWORDS = [
     # Vietnamese (with/without accents are handled by code)
+    "trung tâm",
+    "trung tam",
+    "ở đâu",
+    "o dau",
+    "địa điểm",
+    "dia diem",
     "học phí",
     "hoc phi",
     "lịch học",
@@ -61,10 +75,12 @@ QDRANT_PORT = 6333
 COLLECTION_NAME = "RAG_docs"
 
 # Multi-tenant / multi-branch isolation
-# NOTE: LlamaIndex Qdrant integration stores node metadata under the payload key `metadata` by default.
-# Using dot-path keys ensures filters match the stored payload structure and prevents cross-tenant leakage.
-TENANT_FIELD = "metadata.tenant_id"
-BRANCH_FIELD = "metadata.branch_id"
+# NOTE:
+# - Node metadata keys are `tenant_id` / `branch_id` (see `app/services/ingestion.py`).
+# - Qdrant stores node metadata under the payload key `metadata` (so the Qdrant *payload path* is `metadata.tenant_id`).
+# LlamaIndex will translate metadata filters to the underlying vector-store filter format, so keep these as metadata keys.
+TENANT_FIELD = "tenant_id"
+BRANCH_FIELD = "branch_id"
 ENABLE_BRANCH_FILTER = False
 # If True: refuse to retrieve without tenant_id (recommended for production SaaS)
 REQUIRE_TENANT_ID = False
@@ -100,10 +116,10 @@ BM25_K1 = 1.5
 BM25_B = 0.75
 HYBRID_ALPHA = 0.5  # 1.0 = vector-only, 0.0 = BM25-only
 
-# Debug/trace controls
-DEBUG_VERBOSE = True
-DEBUG_TOPN_PRINT = 3
-DEBUG_SHOW_PROMPT = True
+# Debug/trace controls (default OFF to avoid leaking prompts/PII into logs)
+DEBUG_VERBOSE = (os.getenv("DEBUG_VERBOSE") or "0").strip().lower() in ("1", "true", "yes", "on")
+DEBUG_TOPN_PRINT = int(os.getenv("DEBUG_TOPN_PRINT") or "3")
+DEBUG_SHOW_PROMPT = (os.getenv("DEBUG_SHOW_PROMPT") or "0").strip().lower() in ("1", "true", "yes", "on")
 
 # Postgres (Day 6-7 persistent memory)
 # Prefer configuring via env/.env; keep code default empty to avoid hardcoding credentials.
@@ -139,6 +155,13 @@ DOMAIN_COSINE_THRESHOLD = 0.33
 OUT_OF_DOMAIN_MESSAGE = (
     "Dạ em chỉ hỗ trợ tư vấn các thông tin liên quan đến trung tâm (khóa học, học phí, lịch học, ưu đãi...). "
     "Nếu anh/chị cho em xin **SĐT** và **nhu cầu học**, em sẽ chuyển tư vấn viên liên hệ hỗ trợ chi tiết hơn ạ."
+)
+
+# In-domain but not enough evidence in the tenant knowledge base.
+NO_MATCH_MESSAGE = (
+    "Dạ hiện tại em **chưa tìm thấy thông tin phù hợp trong tài liệu của trung tâm** để trả lời câu này. "
+    "Anh/chị có thể hỏi cụ thể hơn (tên khóa/IELTS/TOEIC/lịch học/học phí/ưu đãi...) giúp em được không ạ? "
+    "Nếu anh/chị cho em xin **SĐT** và **nhu cầu học**, em sẽ chuyển tư vấn viên hỗ trợ chi tiết hơn ạ."
 )
 
 # LLM reliability

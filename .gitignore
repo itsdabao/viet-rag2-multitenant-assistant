@@ -8,6 +8,10 @@ venv/
 
 # Secrets
 .env
+service_account.json
+service_account.*.json
+Copy-Item .env.example .env
+reproduce_toxic.py
 
 # Logs and temp
 logs/
@@ -38,5 +42,7 @@ Thumbs.db
 
 # Docs/binaries (keep repo light; avoid leaking customer data)
 RoadMap.docx
+backend.docx
+sườn.docx
 docs/*.pdf
 docs/*.docx

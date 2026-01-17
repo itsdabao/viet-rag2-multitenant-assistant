@@ -14,6 +14,7 @@ from app.core.config import (
     NODES_CACHE_PATH,
     BM25_K1,
     BM25_B,
+    ENABLE_BRANCH_FILTER,
 )
 
 
@@ -131,6 +132,10 @@ def get_bm25_state(
     tenant_id: Optional[str] = None,
     branch_id: Optional[str] = None,
 ):
+    # Keep behavior consistent with vector retrieval: only consider branch_id when branch filtering is enabled.
+    # Otherwise, passing a branch_id would select a per-branch cache path that likely doesn't exist (n_docs=0).
+    if not ENABLE_BRANCH_FILTER:
+        branch_id = None
     global _BM25_CACHE
     key = (tenant_id, branch_id)
     state = _BM25_CACHE.get(key)

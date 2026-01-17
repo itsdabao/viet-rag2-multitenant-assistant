@@ -108,26 +108,29 @@ def init_qdrant_collection():
     else:
         print(f"Collection '{COLLECTION_NAME}' đã tồn tại -> đang lưu dữ liệu cũ.")
 
-    # Create payload index for tenant_id / branch_id to enable fast filter per tenant
+    # Create payload index for tenant_id / branch_id to enable fast filter per tenant.
+    # In this project, the Qdrant payload stores these fields at the top level (e.g. `tenant_id`).
+    tenant_payload_path = TENANT_FIELD
     try:
         client.create_payload_index(
             collection_name=COLLECTION_NAME,
-            field_name=TENANT_FIELD,
+            field_name=tenant_payload_path,
             field_schema="keyword",
         )
-        print(f"Đã tạo payload index cho '{TENANT_FIELD}'.")
+        print(f"Đã tạo payload index cho '{tenant_payload_path}'.")
     except Exception:
         # ignore if exists or server doesn't support
         pass
 
     if ENABLE_BRANCH_FILTER:
+        branch_payload_path = BRANCH_FIELD
         try:
             client.create_payload_index(
                 collection_name=COLLECTION_NAME,
-                field_name=BRANCH_FIELD,
+                field_name=branch_payload_path,
                 field_schema="keyword",
             )
-            print(f"Đã tạo payload index cho '{BRANCH_FIELD}'.")
+            print(f"Đã tạo payload index cho '{branch_payload_path}'.")
         except Exception:
             pass
     return client

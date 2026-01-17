@@ -1,17 +1,20 @@
 import asyncio
 import logging
+import os
 import time
 import uuid
 from typing import Dict, List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from app.core.bootstrap import bootstrap_runtime
 from app.core.config import PROJECT_ROOT
+from app.api.deps import get_current_user
+from app.api.owner_console import router as owner_router
 from app.services.rag_service import build_index, rag_query
 from app.services.analytics.store import (
     insert_feedback,
@@ -22,11 +25,13 @@ from app.services.analytics.store import (
     metrics,
     new_trace_id,
 )
+from app.core.config import ENABLE_BRANCH_FILTER
 
 
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Viet RAG2 Multitenant Assistant")
+app.include_router(owner_router)
 
 # CORS (phục vụ phát triển frontend; có thể siết lại origins khi deploy)
 origins = ["*"]
@@ -51,6 +56,21 @@ class QueryRequest(BaseModel):
 class QueryResponse(BaseModel):
     answer: str
     sources: List[str]
+    trace_id: Optional[str] = None
+    time_ms: Optional[float] = None
+    route: Optional[str] = None
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: Optional[str] = None
+    branch_id: Optional[str] = None
+
+
+class ChatResponse(BaseModel):
+    reply: str
+    sources: List[str]
+    tenant_used: str
     trace_id: Optional[str] = None
     time_ms: Optional[float] = None
     route: Optional[str] = None
@@ -97,14 +117,26 @@ def startup_event() -> None:
         format="%(asctime)s %(levelname)s: %(message)s",
     )
     logger.info("Starting RAG backend...")
-    bootstrap_runtime()
-    build_index()
+    rag_init = (os.getenv("RAG_INIT_ON_STARTUP") or "1").strip().lower() in ("1", "true", "yes", "on")
+    if rag_init:
+        bootstrap_runtime()
+        build_index()
+    else:
+        logger.info("Skipping RAG init on startup (RAG_INIT_ON_STARTUP=0). Owner Console can still run.")
     logger.info("RAG backend is ready.")
 
 
 @app.get("/health")
 def health() -> Dict[str, str]:
     return {"status": "ok"}
+
+@app.get("/public/config")
+def public_config() -> Dict[str, object]:
+    return {"enable_branch_filter": bool(ENABLE_BRANCH_FILTER)}
+
+@app.get("/", include_in_schema=False)
+def root() -> RedirectResponse:
+    return RedirectResponse(url="/agent")
 
 
 WEB_DIR = PROJECT_ROOT / "web"
@@ -114,6 +146,11 @@ app.mount("/static", StaticFiles(directory=str(WEB_DIR)), name="static")
 @app.get("/admin", include_in_schema=False)
 def admin_ui() -> FileResponse:
     return FileResponse(str(WEB_DIR / "admin.html"))
+
+
+@app.get("/agent", include_in_schema=False)
+def agent_ui() -> FileResponse:
+    return FileResponse(str(WEB_DIR / "agent.html"))
 
 
 @app.get("/admin/api/tenants")
@@ -231,6 +268,73 @@ def query_endpoint(payload: QueryRequest) -> QueryResponse:
     return QueryResponse(
         answer=str(result.get("answer", "") if isinstance(result, dict) else ""),
         sources=[str(s) for s in sources],
+        trace_id=trace_id,
+        time_ms=round(elapsed_ms, 1),
+        route=str(route) if route else None,
+    )
+
+
+@app.post("/chat", response_model=ChatResponse)
+def chat_endpoint(payload: ChatRequest, current_user: dict = Depends(get_current_user)) -> ChatResponse:
+    """
+    Protected chat endpoint:
+    - Requires Firebase ID token (Authorization: Bearer <id_token>)
+    - Uses tenant_id from decoded token (custom claim) to enforce tenant isolation
+    """
+    tenant_id = str(current_user.get("tenant_id") or "").strip()
+    user_id = str(current_user.get("uid") or "").strip() or None
+    if not tenant_id:
+        # Fail-closed: no tenant => do not serve chat.
+        raise ValueError("Missing tenant_id in token.")
+
+    session_id = (payload.session_id or "").strip() or f"{tenant_id}:web:{user_id or 'user'}"
+
+    trace_id = new_trace_id()
+    start = time.perf_counter()
+    err = None
+    try:
+        result = rag_query(
+            question=payload.message,
+            tenant_id=tenant_id,
+            branch_id=payload.branch_id,
+            history=[],
+            channel="tenant_chat",
+            user_id=user_id,
+            session_id=session_id,
+        )
+    except Exception as e:
+        err = str(e)
+        result = {"answer": "", "sources": [], "route": "error"}
+
+    elapsed_ms = (time.perf_counter() - start) * 1000.0
+    sources = (result.get("sources", []) or []) if isinstance(result, dict) else []
+    route = (result.get("route") if isinstance(result, dict) else None) or None
+    tool_md = (result.get("tool_metadata") if isinstance(result, dict) else None) or {}
+
+    try:
+        insert_trace(
+            trace_id=trace_id,
+            tenant_id=tenant_id,
+            branch_id=payload.branch_id,
+            channel="tenant_chat",
+            session_id=session_id,
+            user_id=user_id,
+            question=payload.message or "",
+            answer=str(result.get("answer", "") if isinstance(result, dict) else ""),
+            sources=[str(s) for s in sources],
+            route=str(route) if route else None,
+            status=("ERROR" if err else "SUCCESS"),
+            latency_ms=float(elapsed_ms),
+            tool_metadata=tool_md if isinstance(tool_md, dict) else {},
+            error=err,
+        )
+    except Exception as e:
+        logger.warning("Failed to insert trace (chat): %s", e)
+
+    return ChatResponse(
+        reply=str(result.get("answer", "") if isinstance(result, dict) else ""),
+        sources=[str(s) for s in sources],
+        tenant_used=tenant_id,
         trace_id=trace_id,
         time_ms=round(elapsed_ms, 1),
         route=str(route) if route else None,

@@ -95,17 +95,20 @@ def is_toxic(text: str) -> bool:
     token_set = set(tokens)
 
     # Exact token matches
-    if any(k in token_set for k in ["vcl", "dm", "dmm", "dit", "du", "lon", "cac"]):
+    # NOTE: Avoid common Vietnamese words that become ambiguous after accent-stripping.
+    # - "các" -> "cac" (very common, not toxic)
+    # - "du" appears in many benign words ("du học", "đủ", ...)
+    if any(k in token_set for k in ["vcl", "dm", "dmm", "dit"]):
         return True
 
-    # Compact matches (handles punctuation-separated variants)
-    # Only apply compact matching when the input was split into multiple tokens
-    # (e.g., "v.c.l" -> ["v","c","l"] -> "vcl"). This avoids false positives
-    # like "london" containing "lon".
-    if len(tokens) >= 2:
+    # Compact matches (handles punctuation-separated variants like "d.m", "v.c.l")
+    # Only apply if tokens are mostly single characters to avoid merging normal words
+    # (e.g. "bad man" -> "dm" should NOT trigger).
+    if len(tokens) >= 2 and all(len(t) == 1 for t in tokens):
         if any(k in compact for k in ["vcl", "dm", "dmm", "ditme"]):
             return True
 
+    # Backward compatibility list (substring on original lower)
     # Backward compatibility list (substring on original lower)
     t = (text or "").lower()
     return any(k in t for k in TOXIC_KEYWORDS)
