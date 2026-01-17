@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 from qdrant_client.http.models import Distance
@@ -14,6 +15,10 @@ SYSTEM_PROMPT_PATH = str(PROJECT_ROOT / "app" / "resources" / "prompts" / "syste
 SMALLTALK_PATH = str(PROJECT_ROOT / "app" / "resources" / "smalltalk_vi.json")
 ENABLE_SMALLTALK = True
 SMALLTALK_COSINE_THRESHOLD = 0.78
+
+# Agentic router (Day 4)
+ENABLE_SEMANTIC_ROUTER = True
+TOXIC_MESSAGE = "Dạ em xin phép không hỗ trợ nội dung này. Anh/chị cần tư vấn khóa học/học phí/lịch học nào của trung tâm ạ?"
 
 # In-domain anchors (cheap pre-check before retrieval)
 DOMAIN_ANCHORS_PATH = str(PROJECT_ROOT / "app" / "resources" / "domain_anchors_vi.json")
@@ -93,12 +98,24 @@ BM25_TOP_K = 5
 BM25_MAX_CHARS = 800  # used only in legacy files mode
 BM25_K1 = 1.5
 BM25_B = 0.75
-HYBRID_ALPHA = 0.4  # 1.0 = vector-only, 0.0 = BM25-only
+HYBRID_ALPHA = 0.5  # 1.0 = vector-only, 0.0 = BM25-only
 
 # Debug/trace controls
 DEBUG_VERBOSE = True
 DEBUG_TOPN_PRINT = 3
 DEBUG_SHOW_PROMPT = True
+
+# Postgres (Day 6-7 persistent memory)
+# Prefer configuring via env/.env; keep code default empty to avoid hardcoding credentials.
+DATABASE_URL = (os.getenv("DATABASE_URL") or "").strip()
+CHAT_SESSIONS_TABLE = (os.getenv("CHAT_SESSIONS_TABLE") or "chat_sessions").strip()
+
+# Memory controls (Day 6-7)
+MEMORY_ENABLED = (os.getenv("MEMORY_ENABLED") or "1").strip().lower() in ("1", "true", "yes", "on")
+MEMORY_LAST_TURNS = int(os.getenv("MEMORY_LAST_TURNS") or "6")  # 6 turns = 12 messages (user+assistant)
+MEMORY_BUDGET_TOKENS = int(os.getenv("MEMORY_BUDGET_TOKENS") or "1000")  # apply to (summary + last N turns)
+MEMORY_SUMMARY_ENABLED = (os.getenv("MEMORY_SUMMARY_ENABLED") or "1").strip().lower() in ("1", "true", "yes", "on")
+MEMORY_SUMMARY_MAX_OUTPUT_TOKENS = int(os.getenv("MEMORY_SUMMARY_MAX_OUTPUT_TOKENS") or "350")
 
 # Prompt budget controls
 MAX_PROMPT_CHARS = 9000
@@ -107,7 +124,7 @@ PROMPT_TOP_CONTEXTS = 3  # clamp exact top-N contexts sent to LLM after rerank
 
 # Conversation memory (stateful)
 HISTORY_ENABLED = True
-HISTORY_MAX_TURNS = 4            # số message gần nhất (user/assistant) đưa vào prompt
+HISTORY_MAX_TURNS = int(os.getenv("HISTORY_MAX_TURNS") or "12")  # default ~6 turns (user+assistant)
 HISTORY_MSG_MAX_CHARS = 300      # cắt mỗi message để giữ prompt gọn
 
 # Reranking controls

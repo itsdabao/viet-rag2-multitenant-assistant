@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  # 1. Máy chủ Database
+  db:
+    image: postgres:16-alpine  # Bản Alpine siêu nhẹ, chạy mượt trên 3050
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: admin           # Tên đăng nhập
+      POSTGRES_PASSWORD: 123         # Mật khẩu (bạn tự đổi nhé)
+      POSTGRES_DB: agent_memory      # Tên Database
+    ports:
+      - "5432:5432"                  # Cổng kết nối
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Giữ lại dữ liệu khi tắt máy
+
+  # 2. Giao diện quản lý (Giống phpMyAdmin của XAMPP)
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin_ui
+    restart: always
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: 123
+    ports:
+      - "8080:80"                    # Vào localhost:8080 để xem DB
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:

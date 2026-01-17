@@ -1,10 +1,9 @@
 from pathlib import Path
 from typing import List, Optional
 from llama_index.core import VectorStoreIndex
-from llama_index.core import Settings
 from app.services.documents import load_documents
 from app.services.retrieval.vector_store import init_qdrant_collection, get_storage_context
-from app.core.llama import setup_embedding
+from app.core.bootstrap import bootstrap_embeddings_only
 from app.core.config import DATA_PATH
  
 def run_ingestion(
@@ -14,6 +13,8 @@ def run_ingestion(
     *,
     pdf_engine: str = "auto",
     use_markdown_element_parser: bool = True,
+    section_chunking: bool = True,
+    section_heading_level: int = 2,
 ):
     import os, json
     from app.core.config import CHUNK_SIZE, CHUNK_OVERLAP, NODES_CACHE_PATH
@@ -21,18 +22,26 @@ def run_ingestion(
 
     print("Starting ingestion pipeline ...")
 
-    if Settings.embed_model is None:
-        setup_embedding()
+    # Ensure we never accidentally fall back to default embeddings (e.g., OpenAIEmbedding).
+    # Note: Accessing `Settings.embed_model` may trigger lazy resolution in some llama-index versions.
+    bootstrap_embeddings_only()
     client = init_qdrant_collection()
     storage_context = get_storage_context(client)
 
-    opts = IngestionOptions(pdf_engine=pdf_engine, use_markdown_element_parser=use_markdown_element_parser)
+    opts = IngestionOptions(
+        pdf_engine=pdf_engine,
+        use_markdown_element_parser=use_markdown_element_parser,
+        section_chunking=section_chunking,
+        section_heading_level=section_heading_level,
+    )
     documents = load_documents_for_ingestion(DATA_PATH, input_files=input_files, opts=opts)
     nodes = build_nodes_for_ingestion(
         documents,
         chunk_size=CHUNK_SIZE,
         chunk_overlap=CHUNK_OVERLAP,
         use_markdown_elements=use_markdown_element_parser,
+        section_chunking=opts.section_chunking,
+        section_heading_level=opts.section_heading_level,
     )
 
     # Attach tenant/branch metadata if provided
@@ -71,6 +80,15 @@ def run_ingestion(
     os.makedirs(os.path.dirname(cache_path), exist_ok=True)
     with open(cache_path, 'w', encoding='utf-8') as f:
         for n in nodes:
+            node_id = None
+            for attr in ("node_id", "id_", "id"):
+                try:
+                    v = getattr(n, attr, None)
+                except Exception:
+                    v = None
+                if isinstance(v, str) and v:
+                    node_id = v
+                    break
             try:
                 text = n.get_text()
             except Exception:
@@ -85,7 +103,7 @@ def run_ingestion(
                 md["tenant_id"] = tenant_id
             if branch_id:
                 md["branch_id"] = branch_id
-            json.dump({'text': text, 'metadata': md}, f, ensure_ascii=False)
+            json.dump({'id': node_id, 'text': text, 'metadata': md}, f, ensure_ascii=False)
             f.write('\n')
 
     print("Done. Data has been written to Qdrant and nodes cached.")

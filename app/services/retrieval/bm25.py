@@ -2,7 +2,7 @@ import math
 import re
 import os
 import json
-from typing import List, Dict, Tuple, Optional
+from typing import List, Dict, Tuple, Optional, Any
 
 from llama_index.core.node_parser import SentenceSplitter
 from app.services.documents import load_documents
@@ -100,11 +100,12 @@ class BM25Index:
 _BM25_CACHE: Dict[Tuple[Optional[str], Optional[str]], Dict[str, object]] = {}
 
 
-def _load_from_nodes_cache(path: str = NODES_CACHE_PATH) -> Optional[Tuple[list, list]]:
+def _load_from_nodes_cache(path: str = NODES_CACHE_PATH) -> Optional[Tuple[list, list, list]]:
     if not os.path.exists(path):
         return None
     texts: list = []
     metas: list = []
+    ids: list = []
     with open(path, 'r', encoding='utf-8') as f:
         for line in f:
             line = line.strip()
@@ -114,11 +115,13 @@ def _load_from_nodes_cache(path: str = NODES_CACHE_PATH) -> Optional[Tuple[list,
                 obj = json.loads(line)
             except Exception:
                 continue
+            node_id = obj.get("id") or obj.get("node_id") or obj.get("_id")
             text = obj.get('text') or ''
             meta = obj.get('metadata') or {}
             texts.append(text)
             metas.append(meta if isinstance(meta, dict) else {})
-    return texts, metas
+            ids.append(node_id if isinstance(node_id, str) and node_id else None)
+    return texts, metas, ids
 
 
 def get_bm25_state(
@@ -135,13 +138,23 @@ def get_bm25_state(
         return state
 
     texts: List[str] = []
-    metas: List[Dict[str, str]] = []
+    metas: List[Dict[str, Any]] = []
+    ids: List[Optional[str]] = []
+    cache_path: Optional[str] = None
 
     # Fail-closed: BM25 "files" mode cannot reliably isolate tenants without explicit per-tenant caches.
     if tenant_id is not None and BM25_SOURCE != "nodes_file":
         bm25 = BM25Index(k1=BM25_K1, b=BM25_B)
         bm25.build([])
-        state = {"index": bm25, "texts": [], "metas": []}
+        state = {
+            "index": bm25,
+            "texts": [],
+            "metas": [],
+            "ids": [],
+            "cache_path": None,
+            "source": BM25_SOURCE,
+            "n_docs": 0,
+        }
         _BM25_CACHE[key] = state
         return state
 
@@ -157,11 +170,11 @@ def get_bm25_state(
                 cache_path = os.path.join(base, tenant_id, "nodes.jsonl")
         loaded = _load_from_nodes_cache(cache_path)
         if loaded is not None:
-            texts, metas = loaded
+            texts, metas, ids = loaded
         else:
             # Fail-closed for multi-tenant: don't rebuild from all files if cache is missing.
             # (Avoid cross-tenant leakage.)
-            texts, metas = [], []
+            texts, metas, ids = [], [], []
             loaded = None
             # If caller didn't request a tenant filter, allow fallback rebuild for local dev.
             if tenant_id is None and branch_id is None:
@@ -183,6 +196,7 @@ def get_bm25_state(
                         md = {}
                     texts.append(t)
                     metas.append(md)
+                    ids.append(None)
     else:
         # legacy files mode: split by characters if SentenceSplitter is not desired
         docs = load_documents(data_path)
@@ -203,10 +217,19 @@ def get_bm25_state(
                     md = {}
                 src = md.get("file_name") or md.get("file_path") or md.get("source") or "unknown"
                 metas.append({"file_name": src})
+                ids.append(None)
 
     bm25 = BM25Index(k1=BM25_K1, b=BM25_B)
     bm25.build(texts)
-    state = {"index": bm25, "texts": texts, "metas": metas}
+    state = {
+        "index": bm25,
+        "texts": texts,
+        "metas": metas,
+        "ids": ids,
+        "cache_path": cache_path,
+        "source": BM25_SOURCE,
+        "n_docs": int(getattr(bm25, "N", 0) or 0),
+    }
     _BM25_CACHE[key] = state
     return state
 
@@ -224,6 +247,7 @@ def bm25_retrieve(
     results: List[Dict[str, object]] = []
     for idx, score in pairs:
         results.append({
+            "id": (state.get("ids") or [None])[idx] if idx < len(state.get("ids") or []) else None,
             "text": state["texts"][idx],
             "score": float(score),
             "meta": state["metas"][idx],
@@ -245,6 +269,7 @@ def bm25_retrieve_debug(
     results: List[Dict[str, object]] = []
     for idx, score in pairs:
         results.append({
+            "id": (state.get("ids") or [None])[idx] if idx < len(state.get("ids") or []) else None,
             "text": state["texts"][idx],
             "score": float(score),
             "meta": state["metas"][idx],
@@ -254,4 +279,9 @@ def bm25_retrieve_debug(
         "q_tokens": q_tokens,
         "results": results,
         "pairs": [{"idx": i, "score": float(s)} for i, s in pairs],
+        "stats": {
+            "source": state.get("source"),
+            "cache_path": state.get("cache_path"),
+            "n_docs": state.get("n_docs"),
+        },
     }

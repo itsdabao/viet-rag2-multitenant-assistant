@@ -46,6 +46,17 @@ if __name__ == "__main__":
         help="Tắt MarkdownElementNodeParser (fallback SentenceSplitter)",
     )
     parser.add_argument(
+        "--no-section-chunking",
+        action="store_true",
+        help="Tắt chunk theo mục lớn (heading) khi ingest markdown/llamaparse",
+    )
+    parser.add_argument(
+        "--section-heading-level",
+        type=int,
+        default=2,
+        help="Heading level để tách mục lớn (vd: 2 cho '## ...')",
+    )
+    parser.add_argument(
         "--auto-from-filenames",
         action="store_true",
         help="Quét DATA_PATH và ingest từng file, suy ra tenant từ tên file (tenant_*.pdf)",
@@ -74,6 +85,8 @@ if __name__ == "__main__":
                     input_files=[str(fp)],
                     pdf_engine=args.pdf_engine,
                     use_markdown_element_parser=not args.no_md_elements,
+                    section_chunking=not args.no_section_chunking,
+                    section_heading_level=args.section_heading_level,
                 )
             print("\nIngest hàng loạt hoàn tất.")
         else:
@@ -84,6 +97,8 @@ if __name__ == "__main__":
                     input_files=[args.file],
                     pdf_engine=args.pdf_engine,
                     use_markdown_element_parser=not args.no_md_elements,
+                    section_chunking=not args.no_section_chunking,
+                    section_heading_level=args.section_heading_level,
                 )
             else:
                 run_ingestion(
@@ -91,6 +106,8 @@ if __name__ == "__main__":
                     branch_id=args.branch,
                     pdf_engine=args.pdf_engine,
                     use_markdown_element_parser=not args.no_md_elements,
+                    section_chunking=not args.no_section_chunking,
+                    section_heading_level=args.section_heading_level,
                 )
             print("Ingest hoàn tất.")
     except Exception as e:

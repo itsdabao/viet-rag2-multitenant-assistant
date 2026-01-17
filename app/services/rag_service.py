@@ -2,7 +2,7 @@ import logging
 from typing import Dict, List, Optional
 
 import qdrant_client
-from llama_index.core import Settings, VectorStoreIndex
+from llama_index.core import VectorStoreIndex
 from llama_index.vector_stores.qdrant import QdrantVectorStore
 
 from app.core.config import (
@@ -13,9 +13,11 @@ from app.core.config import (
     QDRANT_PORT,
     RETRIEVAL_TOP_K,
 )
-from app.core.llama import init_llm_from_env, setup_embedding
+from app.core.bootstrap import bootstrap_embeddings_only
+from app.core.llama import init_llm_from_env
 from app.services.retrieval.vector_store import init_qdrant_collection
-from app.services.rag.incontext_ralm import query_with_incontext_ralm
+from app.services.agentic.service import agentic_query
+from app.services.memory.service import memory_rag_query
 
 
 logger = logging.getLogger(__name__)
@@ -32,8 +34,9 @@ def build_index() -> VectorStoreIndex:
     if _INDEX is not None:
         return _INDEX
 
-    if Settings.embed_model is None:
-        setup_embedding()
+    # Ensure we never accidentally fall back to default embeddings (e.g., OpenAIEmbedding).
+    # Note: Accessing `Settings.embed_model` may trigger lazy resolution in some llama-index versions.
+    bootstrap_embeddings_only()
 
     # Ensure collection + payload indexes exist before loading the vector store
     client = init_qdrant_collection()
@@ -51,19 +54,29 @@ def rag_query(
     tenant_id: Optional[str] = None,
     branch_id: Optional[str] = None,
     history: Optional[List[Dict[str, str]]] = None,
+    channel: str = "cli",
+    user_id: Optional[str] = None,
+    session_id: Optional[str] = None,
 ) -> Dict[str, object]:
     """
     Hàm tiện ích RAG dùng chung cho CLI và backend.
     """
     index = build_index()
-    result = query_with_incontext_ralm(
-        user_query=question,
+    if tenant_id and (session_id or user_id):
+        return memory_rag_query(
+            question,
+            index=index,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+            channel=channel,
+            user_id=user_id,
+            session_id=session_id,
+        )
+    return agentic_query(
+        question,
         index=index,
-        fewshot_path=FEWSHOT_PATH,
-        top_k_ctx=RETRIEVAL_TOP_K,
-        top_k_examples=EXAMPLES_TOP_K,
         tenant_id=tenant_id,
         branch_id=branch_id,
-        history=history,
+        history=history or [],
+        user_id=user_id,
     )
-    return result

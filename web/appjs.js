@@ -8,12 +8,73 @@ document.addEventListener("DOMContentLoaded", () => {
   const btnAsk = document.getElementById("btnAsk");
   const inputQuestion = document.getElementById("userQuestion");
   const inputTenant = document.getElementById("tenantId");
+  const inputBranch = document.getElementById("branchId");
+  const inputSession = document.getElementById("sessionId");
   const answerContainer = document.getElementById("answerContainer");
   const sourcesContainer = document.getElementById("sourcesContainer");
   const statusLabel = document.getElementById("statusLabel");
+  const metaLine = document.getElementById("metaLine");
+  const btnUp = document.getElementById("btnUp");
+  const btnDown = document.getElementById("btnDown");
+  const feedbackStatus = document.getElementById("feedbackStatus");
 
   let socket = null;
   let isStreaming = false;
+  let lastTraceId = null;
+  let lastTenant = null;
+
+  function safeUUID() {
+    try {
+      if (typeof crypto !== "undefined" && crypto.randomUUID) return crypto.randomUUID();
+    } catch (e) {}
+    return "sess_" + Math.random().toString(16).slice(2) + "_" + Date.now().toString(16);
+  }
+
+  function getOrCreateSessionId(tenantId) {
+    const key = "novarag.session_id." + String(tenantId || "default");
+    const existing = localStorage.getItem(key);
+    if (existing) return existing;
+    const sid = `${tenantId || "tenant"}:web:${safeUUID().slice(0, 8)}`;
+    localStorage.setItem(key, sid);
+    return sid;
+  }
+
+  function setMeta({ traceId, route }) {
+    if (!metaLine) return;
+    lastTraceId = traceId || null;
+    const parts = [];
+    if (route) parts.push(`<span class="demo-meta-pill">route: ${String(route)}</span>`);
+    if (traceId) {
+      parts.push(`<span class="demo-meta-pill">trace: ${String(traceId).slice(0, 12)}…</span>`);
+      parts.push(`<button class="demo-copy" type="button" data-copy="${String(traceId)}">Copy trace</button>`);
+    }
+    metaLine.innerHTML = parts.join(" ");
+    const copyBtn = metaLine.querySelector(".demo-copy");
+    if (copyBtn) {
+      copyBtn.addEventListener("click", async () => {
+        const t = copyBtn.getAttribute("data-copy");
+        try {
+          await navigator.clipboard.writeText(t || "");
+          copyBtn.textContent = "Copied";
+          setTimeout(() => (copyBtn.textContent = "Copy trace"), 900);
+        } catch (e) {
+          copyBtn.textContent = "Copy failed";
+          setTimeout(() => (copyBtn.textContent = "Copy trace"), 900);
+        }
+      });
+    }
+  }
+
+  function resetFeedbackUI() {
+    if (feedbackStatus) feedbackStatus.textContent = "";
+    if (btnUp) btnUp.disabled = true;
+    if (btnDown) btnDown.disabled = true;
+  }
+
+  function enableFeedbackUI() {
+    if (btnUp) btnUp.disabled = !lastTraceId;
+    if (btnDown) btnDown.disabled = !lastTraceId;
+  }
 
   function setUIState(state) {
     if (!statusLabel || !btnAsk) return;
@@ -40,6 +101,7 @@ document.addEventListener("DOMContentLoaded", () => {
         statusLabel.textContent = "Hoàn tất";
         statusLabel.classList.add("status-complete");
         isStreaming = false;
+        enableFeedbackUI();
         break;
       case "error":
         btnAsk.disabled = false;
@@ -74,6 +136,8 @@ document.addEventListener("DOMContentLoaded", () => {
           sourcesContainer.appendChild(badge);
         });
       }
+      lastTenant = inputTenant ? inputTenant.value.trim() : null;
+      setMeta({ traceId: message.trace_id, route: message.route });
       return;
     }
 
@@ -106,6 +170,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       const question = inputQuestion.value.trim();
       const tenantId = inputTenant.value.trim() || null;
+      const branchId = inputBranch ? inputBranch.value.trim() || null : null;
+      const sessionId = inputSession ? inputSession.value.trim() || null : null;
 
       if (!question) {
         alert("Vui lòng nhập câu hỏi để trải nghiệm demo.");
@@ -118,15 +184,23 @@ document.addEventListener("DOMContentLoaded", () => {
       if (sourcesContainer) {
         sourcesContainer.innerHTML = "";
       }
+      if (metaLine) metaLine.textContent = "";
+      lastTraceId = null;
+      lastTenant = tenantId;
+      resetFeedbackUI();
       setUIState("streaming");
 
       try {
         socket = new WebSocket(WS_URL);
 
         socket.onopen = () => {
+          const sid = sessionId || getOrCreateSessionId(tenantId || "tenant");
+          if (inputSession && !sessionId) inputSession.value = sid;
           const payload = {
             question: question,
             tenant_id: tenantId,
+            branch_id: branchId,
+            session_id: sid,
             history: [],
           };
           socket.send(JSON.stringify(payload));
@@ -156,6 +230,32 @@ document.addEventListener("DOMContentLoaded", () => {
       }
     });
   }
+
+  async function submitFeedback(rating) {
+    if (!lastTraceId) return;
+    if (feedbackStatus) feedbackStatus.textContent = "Đang gửi…";
+    if (btnUp) btnUp.disabled = true;
+    if (btnDown) btnDown.disabled = true;
+    try {
+      const resp = await fetch("/admin/api/feedback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          trace_id: lastTraceId,
+          tenant_id: lastTenant,
+          rating: rating,
+          comment: null,
+        }),
+      });
+      if (!resp.ok) throw new Error(await resp.text());
+      if (feedbackStatus) feedbackStatus.textContent = "Đã ghi nhận. Cảm ơn bạn!";
+    } catch (e) {
+      if (feedbackStatus) feedbackStatus.textContent = "Gửi feedback thất bại.";
+    }
+  }
+
+  if (btnUp) btnUp.addEventListener("click", () => submitFeedback(1));
+  if (btnDown) btnDown.addEventListener("click", () => submitFeedback(-1));
 
   // --- 2. Smooth scroll for nav links ---
   document.querySelectorAll('a[href^="#"]').forEach((link) => {
@@ -188,4 +288,3 @@ document.addEventListener("DOMContentLoaded", () => {
     revealEls.forEach((el) => el.classList.add("is-visible"));
   }
 });
-

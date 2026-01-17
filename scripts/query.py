@@ -3,6 +3,8 @@ import logging
 import argparse
 import traceback
 from pathlib import Path
+import os
+import subprocess
 
 # Đảm bảo import được gói src/* khi chạy từ thư mục scripts/
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -12,6 +14,35 @@ if str(REPO_ROOT) not in sys.path:
 import app.core.config as cfg
 from app.core.bootstrap import bootstrap_runtime
 from app.services.rag_service import build_index, rag_query
+from app.services.memory.store import get_or_create_session, save_session
+
+
+def _ensure_agent_env() -> None:
+    """
+    Re-exec in conda env `agent` so dependencies (llama-index, sqlalchemy, psycopg2) are present.
+    """
+    if os.getenv("QUERY_NO_REEXEC"):
+        return
+    try:
+        import llama_index  # type: ignore  # noqa: F401
+        import sqlalchemy  # type: ignore  # noqa: F401
+        return
+    except Exception:
+        pass
+
+    cmd = ["conda", "run", "-n", "agent", "python", "-X", "utf8", str(Path(__file__).resolve()), *sys.argv[1:]]
+    env = dict(os.environ)
+    env["QUERY_NO_REEXEC"] = "1"
+    env.setdefault("PYTHONIOENCODING", "utf-8")
+    try:
+        r = subprocess.run(cmd, env=env)
+        raise SystemExit(r.returncode)
+    except FileNotFoundError as e:
+        raise RuntimeError(
+            "Cannot find `conda` to re-exec into env `agent`. "
+            "Run inside the correct env:\n"
+            "  conda run -n agent python scripts/query.py"
+        ) from e
 
 
 def init_logging() -> None:
@@ -23,6 +54,7 @@ def init_logging() -> None:
 
 
 def main() -> None:
+    _ensure_agent_env()
     init_logging()
     parser = argparse.ArgumentParser(description="Hybrid RAG (In-Context RALM)")
     parser.add_argument("--debug", action="store_true", help="Bật debug chi tiết")
@@ -34,6 +66,11 @@ def main() -> None:
     )
     parser.add_argument("--tenant", default=None, help="Tenant ID để lọc dữ liệu truy hồi")
     parser.add_argument("--branch", default=None, help="Branch ID (tuỳ chọn) để lọc theo chi nhánh")
+    parser.add_argument(
+        "--session",
+        default=None,
+        help="Session id cho memory bền vững (CLI). Dùng 'tenant_id:session_id' hoặc cung cấp --tenant + --session.",
+    )
     args = parser.parse_args()
 
     # Ghi đè cấu hình theo cờ tối giản
@@ -63,6 +100,15 @@ def main() -> None:
         if args.branch:
             print(f"Branch: {args.branch}")
         history: list[dict] = []
+        session_id = None
+        if args.session:
+            s = str(args.session).strip()
+            if ":" in s:
+                session_id = s
+            elif args.tenant:
+                session_id = f"{args.tenant}:{s}"
+            else:
+                session_id = s
         while True:
             user_query = input("\nBạn hỏi: ")
             if user_query.strip().lower() == "exit":
@@ -71,6 +117,16 @@ def main() -> None:
             if user_query.strip().lower() == "/reset":
                 history.clear()
                 print("Đã xoá lịch sử hội thoại.")
+                if session_id and args.tenant:
+                    try:
+                        st = get_or_create_session(session_id=session_id, tenant_id=args.tenant)
+                        st.rolling_summary = ""
+                        st.recent_messages_buffer = []
+                        st.entity_memory = {}
+                        save_session(state=st)
+                        print("Đã reset memory trong Postgres cho session này.")
+                    except Exception as e:
+                        print(f"Không reset được memory DB: {e}")
                 continue
 
             result = rag_query(
@@ -78,6 +134,8 @@ def main() -> None:
                 tenant_id=args.tenant,
                 branch_id=args.branch,
                 history=history,
+                channel="cli",
+                session_id=session_id,
             )
 
             print("\nAnswer:")
@@ -89,8 +147,9 @@ def main() -> None:
                     print(f" - {s}")
 
             # Lưu lịch sử hội thoại (stateful theo session CLI)
-            history.append({"role": "user", "content": user_query})
-            history.append({"role": "assistant", "content": str(result.get("answer", ""))})
+            if session_id is None:
+                history.append({"role": "user", "content": user_query})
+                history.append({"role": "assistant", "content": str(result.get("answer", ""))})
     except Exception as e:
         # Một số Exception có message rỗng -> in repr + traceback để debug dễ hơn.
         msg = str(e).strip()

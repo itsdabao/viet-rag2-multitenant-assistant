@@ -121,7 +121,6 @@ Mục tiêu: chuyển từ “xử lý tĩnh” sang “Agentic workflow”, ưu
 - Day 8: Tích hợp RAGAS evaluation; set target `Faithfulness` & `Answer Relevance` > 0.8 cho bộ test chuẩn.
 - Day 9: Hoàn thiện Dashboard Admin (theo mẫu luận văn): Avg Time, tỉ lệ hài lòng, tỉ lệ handoff, logs theo tenant.
 - Day 10 (16/1): Đóng gói Docker; kiểm tra WebSocket; smoke test end-to-end; chuẩn bị RELEASE notes.
-
 ---
 
 ## Timeline gợi ý (12 tuần)

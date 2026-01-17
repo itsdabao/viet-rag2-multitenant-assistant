@@ -23,6 +23,7 @@
             <li><a href="#workflow" class="nav__link">Cách hoạt động</a></li>
             <li><a href="#usecases" class="nav__link">Ứng dụng</a></li>
             <li><a href="#demo" class="nav__link">Demo</a></li>
+            <li><a href="/admin" class="nav__link">Admin</a></li>
           </ul>
           <a href="#demo" class="btn btn--primary nav__cta">Demo</a>
         </nav>
@@ -306,6 +307,15 @@
                   />
                 </div>
                 <div class="form-group">
+                  <label for="branchId">Branch ID (tuỳ chọn)</label>
+                  <input id="branchId" type="text" placeholder="vd: cs1" value="" />
+                </div>
+                <div class="form-group">
+                  <label for="sessionId">Session ID (memory)</label>
+                  <input id="sessionId" type="text" placeholder="vd: elitespeak:web:abc123" value="" />
+                  <div class="demo-hint">Nếu để trống, hệ thống tự tạo 1 session theo tenant và lưu trong trình duyệt.</div>
+                </div>
+                <div class="form-group">
                   <label for="userQuestion">Câu hỏi của bạn</label>
                   <textarea
                     id="userQuestion"
@@ -318,6 +328,7 @@
             <div class="demo-panel">
               <div class="demo-panel__header">
                 <span style="font-size: 0.85rem; color: #9ca3af;">Kết quả trả về</span>
+                <span id="metaLine" class="demo-meta-line"></span>
               </div>
               <div id="answerContainer" class="demo-output">
                 <p class="demo-output__placeholder">
@@ -325,6 +336,11 @@
                 </p>
               </div>
               <div id="sourcesContainer" class="demo-sources"></div>
+              <div class="demo-feedback">
+                <button id="btnUp" class="demo-feedback__btn" type="button">👍 Hài lòng</button>
+                <button id="btnDown" class="demo-feedback__btn" type="button">👎 Chưa hài lòng</button>
+                <span id="feedbackStatus" class="demo-feedback__status"></span>
+              </div>
             </div>
           </div>
         </div>
@@ -346,4 +362,3 @@
     <script src="appjs.js"></script>
   </body>
 </html>
-

@@ -1,6 +1,7 @@
 import json
 import os
 import time
+import logging
 from typing import List, Dict, Tuple
 
 import numpy as np
@@ -46,6 +47,9 @@ from app.core.config import (
 from app.services.retrieval.bm25 import bm25_retrieve, bm25_retrieve_debug
 from app.services.guardrails.domain_guard import DomainGuard
 from app.services.guardrails.smalltalk import SmalltalkMatcher
+
+
+logger = logging.getLogger(__name__)
 
 
 def _embed(text: str) -> np.ndarray:
@@ -134,9 +138,26 @@ def _load_system_prompt(path: str) -> str:
 def _render_history(history: List[Dict[str, str]] | None) -> List[str]:
     if not HISTORY_ENABLED or not history:
         return []
-    # Lấy N message gần nhất
-    recent = history[-HISTORY_MAX_TURNS:]
-    lines: List[str] = ["Conversation History:"]
+
+    # Always include rolling summary if present, then last N messages (excluding summary).
+    summary_lines: List[str] = []
+    rest: List[Dict[str, str]] = []
+    for m in history:
+        role = (m.get("role", "") or "").lower()
+        content = (m.get("content", "") or "")
+        if role == "assistant" and content.strip().startswith("[Rolling Summary]"):
+            summary_lines = ["Rolling Summary:", content.strip()[: (HISTORY_MSG_MAX_CHARS * 4)]]
+        else:
+            rest.append(m)
+
+    recent = rest[-HISTORY_MAX_TURNS:]
+    lines: List[str] = []
+    if summary_lines:
+        lines.extend(summary_lines)
+    if recent:
+        if lines:
+            lines.append("")
+        lines.append("Conversation History:")
     for i, m in enumerate(recent, 1):
         role = m.get("role", "user").lower()
         content = (m.get("content", "") or "")[:HISTORY_MSG_MAX_CHARS]
@@ -179,6 +200,57 @@ def _extract_meta(n) -> Dict[str, str]:
         except Exception:
             meta = {}
     return meta if isinstance(meta, dict) else {}
+
+
+def _extract_node_id(n) -> str | None:
+    for attr in ("node_id", "id_", "id"):
+        try:
+            v = getattr(n, attr, None)
+        except Exception:
+            v = None
+        if isinstance(v, str) and v:
+            return v
+    try:
+        node = getattr(n, "node", None)
+        if node is not None:
+            for attr in ("node_id", "id_", "id"):
+                try:
+                    v = getattr(node, attr, None)
+                except Exception:
+                    v = None
+                if isinstance(v, str) and v:
+                    return v
+    except Exception:
+        pass
+    return None
+
+
+def _result_key(r: Dict[str, object]) -> str:
+    rid = r.get("id")
+    if isinstance(rid, str) and rid:
+        return rid
+    meta = r.get("meta") or {}
+    if isinstance(meta, dict):
+        # Prefer explicit IDs if present
+        doc_id = meta.get("doc_id")
+        chunk_id = meta.get("chunk_id")
+        if isinstance(doc_id, str) and doc_id and isinstance(chunk_id, str) and chunk_id:
+            return f"{doc_id}:{chunk_id}"
+        for k in ("chunk_id", "doc_id"):
+            v = meta.get(k)
+            if isinstance(v, str) and v:
+                return v
+        # Otherwise include a stable source hint to reduce collisions.
+        src = meta.get("source") or meta.get("file_name") or meta.get("file_path")
+        if isinstance(src, str) and src:
+            t = r.get("text") or ""
+            if not isinstance(t, str):
+                t = str(t)
+            return f"{src}::{t[:120]}"
+    t = r.get("text") or ""
+    if not isinstance(t, str):
+        t = str(t)
+    return t[:200]
 
 
 def _build_metadata_filters(tenant_id: str | None, branch_id: str | None):
@@ -235,6 +307,7 @@ def _vector_retrieve(
     nodes = retriever.retrieve(user_query)
     results: List[Dict[str, object]] = []
     for n in nodes:
+        node_id = _extract_node_id(n)
         try:
             txt = n.get_text()
         except Exception:
@@ -244,32 +317,60 @@ def _vector_retrieve(
             score = float(getattr(n, "score", 0.0) or 0.0)
         except Exception:
             score = 0.0
-        results.append({"text": (txt or "")[:1200], "score": score, "meta": _extract_meta(n)})
+        results.append({"id": node_id, "text": (txt or "")[:1200], "score": score, "meta": _extract_meta(n)})
     return results
 
 
-def _hybrid_fuse(vec_res: List[Dict[str, object]], bm25_res: List[Dict[str, object]], *, final_top_k: int) -> List[Dict[str, object]]:
-    def _normalize(res: List[Dict[str, object]]):
-        max_s = max((float(r.get("score", 0.0)) for r in res), default=0.0)
-        for r in res:
-            s = float(r.get("score", 0.0))
-            r["_norm"] = (s / max_s) if max_s > 0 else 0.0
+def _hybrid_fuse(
+    vec_res: List[Dict[str, object]],
+    bm25_res: List[Dict[str, object]],
+    *,
+    final_top_k: int,
+    rrf_k: int = 60,
+) -> List[Dict[str, object]]:
+    """
+    Hybrid fusion using Reciprocal Rank Fusion (RRF).
 
-    _normalize(vec_res)
-    _normalize(bm25_res)
+    This avoids relying on incomparable score scales (vector similarity vs. BM25 score).
+    HYBRID_ALPHA is used as a weight between the two rank contributions.
+    """
+    alpha = float(HYBRID_ALPHA)
+    if not (0.0 <= alpha <= 1.0):
+        alpha = 0.5
 
     fused: Dict[str, Dict[str, object]] = {}
-    for r in vec_res:
-        key = r["text"]
-        fused[key] = {"text": r["text"], "meta": r.get("meta", {}), "score": HYBRID_ALPHA * r["_norm"]}
-    for r in bm25_res:
-        key = r["text"]
-        if key in fused:
-            fused[key]["score"] += (1.0 - HYBRID_ALPHA) * r["_norm"]
-        else:
-            fused[key] = {"text": r["text"], "meta": r.get("meta", {}), "score": (1.0 - HYBRID_ALPHA) * r["_norm"]}
 
-    fused_list = sorted(fused.values(), key=lambda x: x["score"], reverse=True)
+    def _add_ranked(res: List[Dict[str, object]], *, weight: float, source: str) -> None:
+        for rank, r in enumerate(res, 1):
+            key = _result_key(r)
+            add = float(weight) * (1.0 / float(rrf_k + rank))
+            cur = fused.get(key)
+            if cur is None:
+                fused[key] = {
+                    "id": r.get("id"),
+                    "text": r.get("text", ""),
+                    "meta": r.get("meta", {}) or {},
+                    "score": add,
+                }
+            else:
+                cur["score"] = float(cur.get("score", 0.0)) + add
+                if not cur.get("id") and r.get("id"):
+                    cur["id"] = r.get("id")
+                # Merge meta without overwriting existing keys.
+                m = r.get("meta") or {}
+                if isinstance(m, dict):
+                    cm = cur.get("meta") or {}
+                    if not isinstance(cm, dict):
+                        cm = {}
+                    for k, v in m.items():
+                        if k not in cm and v is not None:
+                            cm[k] = v
+                    cur["meta"] = cm
+
+    _add_ranked(vec_res, weight=alpha, source="vector")
+    _add_ranked(bm25_res, weight=(1.0 - alpha), source="bm25")
+
+    fused_list = sorted(fused.values(), key=lambda x: float(x.get("score", 0.0)), reverse=True)
     return fused_list[:final_top_k]
 
 
@@ -308,15 +409,23 @@ def query_with_incontext_ralm(
         if not decision.in_domain:
             return {"answer": OUT_OF_DOMAIN_MESSAGE, "sources": []}
 
+    retrieval_metrics: Dict[str, object] | None = None
+
     # Retrieve knowledge: vector + optional BM25, then fuse
     _dbg_print("Starting retrieval pipeline")
     _dbg_block([
         f"Query: {user_query}",
         f"Vector top_k={top_k_ctx}, BM25 enabled={USE_BM25}, bm25_top_k={BM25_TOP_K}",
     ])
+    t0 = time.perf_counter()
+    t_vec0 = time.perf_counter()
     vec_res = _vector_retrieve(index, user_query, top_k_ctx, tenant_id=tenant_id, branch_id=branch_id)
+    t_vec_ms = (time.perf_counter() - t_vec0) * 1000.0
     bm25_res: List[Dict[str, object]] = []
+    bm25_stats = None
+    t_bm25_ms = 0.0
     if USE_BM25:
+        t_bm250 = time.perf_counter()
         bm25_dbg = bm25_retrieve_debug(
             user_query,
             top_k=BM25_TOP_K,
@@ -324,8 +433,10 @@ def query_with_incontext_ralm(
             tenant_id=tenant_id,
             branch_id=branch_id,
         )
+        t_bm25_ms = (time.perf_counter() - t_bm250) * 1000.0
         bm25_tokens = bm25_dbg.get("q_tokens", [])
         bm25_res = bm25_dbg.get("results", [])
+        bm25_stats = bm25_dbg.get("stats")
         _dbg_block(["BM25 tokens: " + str(bm25_tokens), "BM25 top results (score, src):"])
         for r in bm25_res[:DEBUG_TOPN_PRINT]:
             m = r.get("meta", {}) or {}
@@ -336,12 +447,36 @@ def query_with_incontext_ralm(
         m = r.get("meta", {}) or {}
         src = m.get("file_name") or m.get("file_path") or "unknown"
         _dbg_block([f"  {r.get('score', 0.0):.4f} | {src}"])
+    t_fuse0 = time.perf_counter()
     fused = _hybrid_fuse(vec_res, bm25_res, final_top_k=top_k_ctx)
-    _dbg_block(["Fused results (norm-weighted score, src):"])
+    t_fuse_ms = (time.perf_counter() - t_fuse0) * 1000.0
+    _dbg_block(["Fused results (RRF score, src):"])
     for r in fused[:DEBUG_TOPN_PRINT]:
         m = r.get("meta", {}) or {}
         src = m.get("file_name") or m.get("file_path") or "unknown"
         _dbg_block([f"  {r.get('score', 0.0):.4f} | {src}"])
+
+    retrieval_metrics = {
+        "len_q": len(user_query or ""),
+        "tenant_id": tenant_id,
+        "branch_id": branch_id,
+        "alpha": float(HYBRID_ALPHA),
+        "top_k_ctx": int(top_k_ctx),
+        "bm25_enabled": bool(USE_BM25),
+        "bm25_top_k": int(BM25_TOP_K),
+        "n_vec": int(len(vec_res)),
+        "n_bm25": int(len(bm25_res)),
+        "n_fused": int(len(fused)),
+        "t_vec_ms": round(float(t_vec_ms), 1),
+        "t_bm25_ms": round(float(t_bm25_ms), 1),
+        "t_fuse_ms": round(float(t_fuse_ms), 1),
+        "t_total_retrieval_ms": round(float((time.perf_counter() - t0) * 1000.0), 1),
+        "bm25": bm25_stats,
+    }
+    try:
+        logger.info("retrieval_metrics %s", json.dumps(retrieval_metrics, ensure_ascii=False))
+    except Exception:
+        pass
 
     best_cosine: float | None = None
 
@@ -350,7 +485,7 @@ def query_with_incontext_ralm(
         try:
             q_vec = _embed(user_query)
             # take top M to re-score
-            pool = fused[: max(RERANK_TOP_M, len(fused))]
+            pool = fused[: min(RERANK_TOP_M, len(fused))]
             # normalize fused score
             max_f = max((float(it.get("score", 0.0)) for it in pool), default=0.0)
             rescored = []
@@ -473,7 +608,10 @@ def query_with_incontext_ralm(
                             m = r.get("meta", {}) or {}
                             src = m.get("file_name") or m.get("file_path") or m.get("source") or "unknown"
                             sources.append(str(src))
-                        return {"answer": answer_text, "sources": sources}
+                        out = {"answer": answer_text, "sources": sources}
+                        if retrieval_metrics is not None:
+                            out["retrieval_metrics"] = retrieval_metrics
+                        return out
                 raise
     answer_text = getattr(resp, "text", str(resp))
 
@@ -484,4 +622,65 @@ def query_with_incontext_ralm(
         src = m.get("file_name") or m.get("file_path") or m.get("source") or "unknown"
         sources.append(str(src))
 
-    return {"answer": answer_text, "sources": sources}
+    out = {"answer": answer_text, "sources": sources}
+    if retrieval_metrics is not None:
+        out["retrieval_metrics"] = retrieval_metrics
+    return out
+
+
+def retrieve_hybrid_contexts(
+    user_query: str,
+    index: VectorStoreIndex,
+    *,
+    top_k_ctx: int = 5,
+    tenant_id: str | None = None,
+    branch_id: str | None = None,
+) -> Dict[str, object]:
+    """
+    Retrieval-only API: returns fused contexts + metrics, without calling LLM.
+    Intended for tool-first flows (calculator/comparison) to reduce LLM calls.
+    """
+    t0 = time.perf_counter()
+    t_vec0 = time.perf_counter()
+    vec_res = _vector_retrieve(index, user_query, top_k_ctx, tenant_id=tenant_id, branch_id=branch_id)
+    t_vec_ms = (time.perf_counter() - t_vec0) * 1000.0
+
+    bm25_res: List[Dict[str, object]] = []
+    bm25_stats = None
+    t_bm25_ms = 0.0
+    if USE_BM25:
+        t_bm250 = time.perf_counter()
+        bm25_dbg = bm25_retrieve_debug(
+            user_query,
+            top_k=BM25_TOP_K,
+            max_chars=BM25_MAX_CHARS,
+            tenant_id=tenant_id,
+            branch_id=branch_id,
+        )
+        t_bm25_ms = (time.perf_counter() - t_bm250) * 1000.0
+        bm25_res = bm25_dbg.get("results", [])
+        bm25_stats = bm25_dbg.get("stats")
+
+    t_fuse0 = time.perf_counter()
+    fused = _hybrid_fuse(vec_res, bm25_res, final_top_k=top_k_ctx)
+    t_fuse_ms = (time.perf_counter() - t_fuse0) * 1000.0
+
+    metrics = {
+        "len_q": len(user_query or ""),
+        "tenant_id": tenant_id,
+        "branch_id": branch_id,
+        "alpha": float(HYBRID_ALPHA),
+        "top_k_ctx": int(top_k_ctx),
+        "bm25_enabled": bool(USE_BM25),
+        "bm25_top_k": int(BM25_TOP_K),
+        "n_vec": int(len(vec_res)),
+        "n_bm25": int(len(bm25_res)),
+        "n_fused": int(len(fused)),
+        "t_vec_ms": round(float(t_vec_ms), 1),
+        "t_bm25_ms": round(float(t_bm25_ms), 1),
+        "t_fuse_ms": round(float(t_fuse_ms), 1),
+        "t_total_retrieval_ms": round(float((time.perf_counter() - t0) * 1000.0), 1),
+        "bm25": bm25_stats,
+    }
+
+    return {"contexts": fused, "metrics": metrics}

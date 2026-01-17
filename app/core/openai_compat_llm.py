@@ -90,6 +90,11 @@ def _build_llamaindex_llm_class():
                 "temperature": float(kwargs.get("temperature", self.temperature)),
                 "max_tokens": int(kwargs.get("max_tokens", self.max_tokens)),
             }
+            # Optional OpenAI-compatible params (best-effort; ignored by providers that don't support them).
+            if "response_format" in kwargs and kwargs["response_format"] is not None:
+                payload["response_format"] = kwargs["response_format"]
+            if "seed" in kwargs and kwargs["seed"] is not None:
+                payload["seed"] = kwargs["seed"]
 
             with httpx.Client(timeout=float(self.timeout_s)) as client:
                 resp = client.post(url, headers=headers, json=payload)

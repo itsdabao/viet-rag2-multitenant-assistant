@@ -1,27 +1,103 @@
 # Viet RAG2 Multitenant Assistant
 
-Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Qdrant + BM25 + Gemini. Hệ thống hỗ trợ multi‑tenant (nhiều khách hàng), hybrid search, rerank bằng cosine và có cả CLI lẫn backend FastAPI.
+Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Qdrant + Hybrid Retrieval (Vector + BM25) + Agentic Tools + Postgres Memory. Hệ thống hỗ trợ multi‑tenant (nhiều khách hàng), hybrid search, rerank nhẹ bằng cosine, có CLI + backend FastAPI + web demo + admin dashboard.
 
 ## Tính năng chính
 
-- Ingest tài liệu (PDF, DOCX, TXT, MD, RTF) vào Qdrant bằng LlamaIndex.
-- Hybrid retrieval: kết hợp vector search (Qdrant) và BM25 trên corpus đã chunk.
-- Rerank nhẹ bằng cosine giữa truy vấn và context (có thể bật/tắt qua config).
-- Smalltalk + out-of-domain guard: trả lời hội thoại đơn giản và chặn câu hỏi ngoài phạm vi để giảm số lần gọi LLM (cấu hình trong `app/core/config.py`, dữ liệu tại `app/resources/smalltalk_vi.json` và `app/resources/domain_anchors_vi.json`).
-- Hỗ trợ multi‑tenant thông qua metadata `tenant_id` khi ingest và query.
-- Giao diện CLI hỏi‑đáp và backend FastAPI với endpoint `/query`.
+- Ingest tài liệu (PDF/DOCX/TXT/MD/RTF) → chunk → embedding → Qdrant.
+- Multi‑tenant isolation bằng metadata filters (`tenant_id`, `branch_id`) để tránh “râu ông nọ chắp cằm bà kia”.
+- Hybrid retrieval: kết hợp vector search (Qdrant) + lexical search (BM25 local).
+- Rerank nhẹ bằng cosine để chọn top contexts tốt nhất trước khi đưa vào prompt.
+- Agentic workflow: preprocessing → routing → tool execution (tính học phí/tổng thanh toán, so sánh, tạo ticket/handoff, RAG course_search).
+- Persistent memory (Postgres): rolling summary + recent buffer + entity_memory theo session.
+- Evaluation (Day 8): golden set + cheap checks (leakage/consistency) + (optional) RAGAS.
+- Admin Dashboard (Day 9): Avg time, p95, satisfaction rate, handoff rate, logs theo tenant.
+
+---
+
+## Công nghệ / kỹ thuật / model / thuật toán đang dùng (và vai trò)
+
+### 1) FastAPI + WebSocket (Backend API)
+- **FastAPI** (`app/api/main.py`): cung cấp HTTP endpoint `/query` và các endpoint admin (`/admin/api/*`).
+- **WebSocket** (`/ws/query`): stream câu trả lời theo chunk để web demo có trải nghiệm giống ChatGPT.
+- **CORS middleware**: cho phép web demo gọi API trong môi trường dev.
+
+### 2) LlamaIndex (RAG framework / orchestration)
+- **VectorStoreIndex + Settings**: chuẩn hoá cách load vector store, embeddings, LLM, và gọi pipeline RAG.
+- **Query pipeline**: dựng prompt từ system prompt + lịch sử + contexts + few-shot (in-context RALM).
+- **Abstraction LLM**: chạy với nhiều provider (Gemini/Groq/OpenAI‑compatible) tùy env vars.
+
+### 3) Qdrant (Vector Database)
+- **Qdrant** (`localhost:6333`): lưu vector embeddings + payload metadata.
+- **Payload filter**: bắt buộc lọc theo `metadata.tenant_id` (và `metadata.branch_id` nếu bật) để đảm bảo cô lập dữ liệu SaaS.
+
+### 4) Embedding Model: `BAAI/bge-m3`
+- Vai trò: biến text thành vector 1024‑d (cosine) để truy vấn ngữ nghĩa trên Qdrant.
+- Dùng cho: retrieval (vector search), rerank cosine (query vs context) và chọn few-shot theo similarity.
+
+### 5) BM25 (Lexical Retrieval)
+- Vai trò: truy hồi theo từ khóa (lexical) để “bám chữ”, hữu ích với câu hỏi chứa mã/thuật ngữ/định danh.
+- Dùng cho: hybrid search (kết hợp với vector bằng `HYBRID_ALPHA`) và fallback khi không có index.
+
+### 6) Hybrid Retrieval (Vector + BM25) + Fusion
+- **Hybrid alpha**: cân bằng độ “ngữ nghĩa” (vector) và độ “bám chữ” (BM25).
+- Vai trò: tăng recall trong tài liệu thực tế (đặc biệt là bảng học phí/lịch/định dạng không chuẩn).
+
+### 7) Rerank nhẹ bằng cosine
+- Vai trò: sau khi retrieve top‑K, tính cosine(query_embedding, context_embedding) để chọn lại top contexts tốt hơn.
+- Lợi ích: giảm nhiễu, giảm token, tăng faithfulness cho câu trả lời.
+
+### 8) In‑Context RALM (Few‑shot + Context + History)
+- Vai trò: nhúng few‑shot examples phù hợp + contexts + (optional) history để “dạy” LLM trả lời đúng format, đúng scope.
+- Lợi ích: ổn định văn phong, giảm prompt engineering thủ công rời rạc.
+
+### 9) Agentic Routing + Tool‑first (Day 4–5)
+- **Preprocessing**: language detect, toxic filter, phone extraction.
+- **Router**: quyết định route (smalltalk/out_of_domain/course_search/tuition_calculator/comparison/create_ticket) để giảm LLM call và tăng tính “business”.
+- **Tool-first**:
+  - `tuition_calculator_tool`: tính **tổng thanh toán** (học phí + phí phụ), xử lý scope giảm giá (“giảm gói học” vs “giảm tổng”).
+  - `comparison_tool`: so sánh nhanh 2 gói/khóa theo evidence.
+  - `create_ticket_tool`: handoff sang tư vấn viên + lưu ticket.
+  - `course_search_tool`: RAG trả lời đầy đủ (LLM‑backed).
+
+### 10) LLM‑backed Finance Extractor (chống nhiễu tiền rác)
+- `extract_financials_with_llm` + `refine_extracted_fees`: phân loại **học phí chính** vs **phí phụ** ngay cả khi OCR rớt “VND/đ”.
+- Vai trò: tăng độ đúng của công cụ tính tiền khi trong tài liệu có nhiều con số (ví dụ 9.000.000 vs 300.000).
+
+### 11) Postgres + SQLAlchemy (Memory bền vững + Analytics)
+- **Conversation memory (Day 6–7)**:
+  - `chat_sessions`: `entity_memory` (JSONB), `rolling_summary`, `recent_messages_buffer`.
+  - Cơ chế: giới hạn budget (~1000 tokens), tự roll‑up summary, giữ last N turns.
+- **Analytics (Day 9)**:
+  - `request_traces`: 1 dòng / request (latency, route, sources_count, tool_metadata…).
+  - `user_feedback`: thumbs up/down để tính satisfaction.
+  - `handoff_tickets`: ticket/handoff để tính handoff rate.
+
+### 12) Web UI (HTML/CSS/JS thuần)
+- `web/frontend_test.html` + `web/appjs.js`: landing + live demo streaming (WebSocket), có session_id (memory), feedback (👍/👎), hiển thị trace/route.
+- `web/admin.html` + `web/admin.js`: dashboard KPI + logs + handoffs theo tenant.
+
+### 13) Evaluation (Day 8)
+- `scripts/eval_day8.py`: chạy golden set, cheap checks (tenant leakage, calculator consistency…), optional RAGAS.
+- `scripts/eval_discount_tool.py`: interactive tool runner + trace JSONL để debug tool behavior.
+
+---
 
 ## 1. Chuẩn bị môi trường
 
 Yêu cầu:
-- Python 3.10–3.11
+- Python 3.11+ (khuyến nghị chạy trong conda env `agent` như repo đang dùng)
 - Docker (để chạy Qdrant)
+- Postgres (để bật memory + dashboard; nếu không có Postgres thì chỉ chạy được phần core RAG, không có dashboard)
 
 Khuyến nghị tạo môi trường ảo riêng (ví dụ conda):
 
 Tạo file `.env` ở root:
 
 ```bash
+# Postgres (Day 6–7 memory + Day 9 dashboard)
+DATABASE_URL=postgresql+psycopg2://admin:123@localhost:5432/agent_memory
+
 # (Optional) ép provider để tránh tự fallback sang Gemini/OpenAI
 LLM_PROVIDER=groq
 
@@ -94,6 +170,8 @@ uvicorn app.api.main:app --reload --port 8000
 
 Truy cập:
 - Docs tự động: `http://localhost:8000/docs`
+- Admin Dashboard (Day 9): `http://localhost:8000/admin`
+- Web demo (landing + streaming chat): `http://localhost:8000/static/frontend_test.html`
 - Test nhanh endpoint `/query` với body mẫu:
 
 ```json
@@ -101,6 +179,7 @@ Truy cập:
   "question": "Trung tâm BrightPath có những chương trình nào?",
   "tenant_id": "brightpathacademy",
   "branch_id": null,
+  "session_id": "brightpathacademy:web:demo01",
   "history": []
 }
 ```
@@ -110,28 +189,32 @@ Backend sẽ trả:
 ```json
 {
   "answer": "...",
-  "sources": ["tenant_brightpathacademy.pdf", "..."]
+  "sources": ["tenant_brightpathacademy.pdf", "..."],
+  "trace_id": "....",
+  "time_ms": 123.4,
+  "route": "course_search"
 }
 ```
 
 ## 6. Cấu trúc thư mục
 
-- `src/config.py` – cấu hình chung (Qdrant, embedding, BM25, RAG).
-- `src/embedding_model.py` – khởi tạo model embedding `BAAI/bge-m3`.
-- `src/vector_store.py` – kết nối và tạo collection Qdrant.
-- `src/ingest_pipeline.py` – pipeline ingest + chunk + persist nodes.
-- `src/lexical_bm25.py` – triển khai BM25 và hybrid retrieval.
-- `src/incontext_ralm.py` – logic RAG 2.0 + few-shot + rerank cosine.
-- `src/rag_engine.py` – “trái tim” RAG dùng chung cho CLI và backend.
-- `scripts/ingest.py` – CLI để ingest dữ liệu.
-- `scripts/query.py` – CLI chat với RAG.
-- `app/api/main.py` – FastAPI backend (healthcheck + `/query`).
-- `web/` – frontend demo (HTML/CSS/JS).
+- `app/api/main.py` – FastAPI backend (HTTP `/query`, WS `/ws/query`, admin `/admin` + `/admin/api/*`).
+- `app/core/` – config, bootstrap Settings (LLM/embeddings), adapters provider.
+- `app/services/rag_service.py` – entrypoint RAG dùng chung (CLI/backend), tích hợp memory khi có `tenant_id` + `session_id`.
+- `app/services/rag/` – hybrid retrieval + rerank + in-context RALM (few-shot + contexts + history).
+- `app/services/agentic/` – preprocessing, routing, tools (tuition/comparison/course_search/create_ticket), fee extractor.
+- `app/services/memory/` – Postgres memory store + rolling summary + entity memory.
+- `app/services/analytics/` – lưu trace/feedback/handoff để dashboard query KPI.
+- `scripts/` – ingest/query/eval utilities (Day 8 eval, tool runner…).
+- `web/` – landing + live demo + admin dashboard (HTML/CSS/JS thuần).
+- `data/` – knowledge_base, cache nodes, eval artifacts, docs tham khảo.
+- `src/` – (nếu có) phần code cũ/prototype; core hiện tại ưu tiên `app/`.
 
 ## 7. Ghi chú phát triển
 
 Các ý tưởng, roadmap và log phát triển chi tiết nằm trong:
 - `data/giai đoạn phát triển.docx`
 - `data/Log_phat_trien.docx`
+- `ROADMAP.md` (Day 1 → Day 10)
 
 Đây là nơi mô tả các giai đoạn RAG 1.0 → 2.0, hybrid, multi‑tenant và kế hoạch đánh giá. 
