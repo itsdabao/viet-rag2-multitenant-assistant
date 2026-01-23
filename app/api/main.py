@@ -7,7 +7,7 @@ from typing import Dict, List, Optional
 
 from fastapi import Depends, FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, JSONResponse, PlainTextResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -15,6 +15,7 @@ from app.core.bootstrap import bootstrap_runtime
 from app.core.config import PROJECT_ROOT
 from app.api.deps import get_current_user
 from app.api.owner_console import router as owner_router
+from app.services.agentic.service import semantic_router_response
 from app.services.rag_service import build_index, rag_query
 from app.services.analytics.store import (
     insert_feedback,
@@ -50,6 +51,14 @@ class QueryRequest(BaseModel):
     branch_id: Optional[str] = None
     history: Optional[List[Dict[str, str]]] = None
     session_id: Optional[str] = None
+    user_id: Optional[str] = None
+
+
+class SemanticRequest(BaseModel):
+    question: str
+    tenant_id: Optional[str] = None
+    branch_id: Optional[str] = None
+    history: Optional[List[Dict[str, str]]] = None
     user_id: Optional[str] = None
 
 
@@ -133,6 +142,43 @@ def health() -> Dict[str, str]:
 @app.get("/public/config")
 def public_config() -> Dict[str, object]:
     return {"enable_branch_filter": bool(ENABLE_BRANCH_FILTER)}
+
+@app.post("/semantic", include_in_schema=True)
+def semantic_endpoint(payload: SemanticRequest):
+    """
+    Semantic Router output mode (per prompt spec):
+    - tool needed -> pure JSON {tool_name, arguments, thought}
+    - otherwise -> plain text
+    """
+    # Fast path: try semantic routing without bootstrapping embeddings/LLM/Qdrant.
+    # This covers calculator/comparison/ticket intents and keeps `/semantic` responsive even when vector DB is down.
+    try:
+        out = semantic_router_response(
+            payload.question,
+            index=None,
+            tenant_id=payload.tenant_id,
+            branch_id=payload.branch_id,
+            history=payload.history or [],
+            user_id=payload.user_id,
+        )
+    except RuntimeError:
+        # Course search requires RAG (embeddings + Qdrant index).
+        try:
+            bootstrap_runtime()
+            index = build_index()
+            out = semantic_router_response(
+                payload.question,
+                index=index,
+                tenant_id=payload.tenant_id,
+                branch_id=payload.branch_id,
+                history=payload.history or [],
+                user_id=payload.user_id,
+            )
+        except Exception as e:
+            return PlainTextResponse(str(e), status_code=503)
+    if isinstance(out, dict):
+        return JSONResponse(out)
+    return PlainTextResponse(str(out or ""))
 
 @app.get("/", include_in_schema=False)
 def root() -> RedirectResponse:

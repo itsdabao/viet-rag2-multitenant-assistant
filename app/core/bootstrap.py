@@ -51,5 +51,12 @@ def bootstrap_runtime() -> None:
         return
     bootstrap_embeddings_only()
     # Always override to the configured provider to avoid accidental defaults (e.g., OpenAI LLM).
+    # [LOCAL OVERRIDE] Force Qwen 2.5 local model for fee_extractor / pipeline
+    # User requested: "D:\AI_Agent\models\qwen2.5-3b-instruct-q4_k_m.gguf"
+    os.environ["LLM_PROVIDER"] = "llama_cpp"
+    os.environ["LLAMA_CPP_MODEL_PATH"] = r"D:\AI_Agent\models\qwen2.5-3b-instruct-q4_k_m.gguf"
+    os.environ["LLAMA_CPP_N_CTX"] = "4096"
+    os.environ["LLAMA_CPP_N_GPU_LAYERS"] = "-1"
+    
     init_llm_from_env()
     _BOOTSTRAPPED_RUNTIME = True

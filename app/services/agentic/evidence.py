@@ -17,6 +17,22 @@ def parse_money_to_vnd(s: str) -> Optional[int]:
     # Normalize common symbols to help downstream matching.
     raw = raw.replace("đ", "vnd")
 
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(k|nghin|ngan|ngàn|nghìn|canh|cành)\b", raw)
+    if m:
+        try:
+            v = float(m.group(1).replace(",", "."))
+            return int(round(v * 1_000))
+        except Exception:
+            return None
+
+    m = re.search(r"(\d+(?:[.,]\d+)?)\s*(cu|củ)\b", raw)
+    if m:
+        try:
+            v = float(m.group(1).replace(",", "."))
+            return int(round(v * 1_000_000))
+        except Exception:
+            return None
+
     m = re.search(r"(\d+(?:[.,]\d+)?)\s*tr\b", raw)
     if m:
         v = float(m.group(1).replace(",", "."))

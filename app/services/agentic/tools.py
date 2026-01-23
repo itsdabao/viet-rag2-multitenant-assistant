@@ -27,6 +27,7 @@ class ToolResult:
     answer: str
     sources: List[str]
     metadata: Dict[str, object] | None = None
+    context_texts: List[str] | None = None
 
 
 def _sources_from_contexts(contexts: List[Dict[str, object]]) -> List[str]:
@@ -62,7 +63,11 @@ def course_search_tool(
         branch_id=branch_id,
         history=history or [],
     )
-    return ToolResult(answer=str(result.get("answer", "")), sources=[str(s) for s in (result.get("sources", []) or [])])
+    return ToolResult(
+        answer=str(result.get("answer", "")),
+        sources=[str(s) for s in (result.get("sources", []) or [])],
+        context_texts=[str(c) for c in (result.get("contexts", []) or [])]
+    )
 
 
 def tuition_calculator_tool(
@@ -623,6 +628,7 @@ def tuition_calculator_tool(
                 "amount_from_query_vnd": amount_from_query,
             },
         },
+        context_texts=[str(c.get("text", "")) for c in contexts]
     )
 
 
@@ -779,10 +785,16 @@ def comparison_tool(
         seen.add(s)
         dedup_sources.append(s)
 
+    # Collect all contexts from all entities
+    all_contexts: List[str] = []
+    for _name, _ev, _ctxs, _ in summaries:
+         all_contexts.extend([str(c.get("text", "")) for c in _ctxs])
+
     return ToolResult(
         answer="\n".join(lines),
         sources=dedup_sources,
         metadata={"route": "comparison", "retrieval": ("hybrid" if index is not None else "bm25_only")},
+        context_texts=all_contexts
     )
 
 

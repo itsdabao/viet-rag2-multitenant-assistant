@@ -8,10 +8,7 @@ venv/
 
 # Secrets
 .env
-service_account.json
-service_account.*.json
-Copy-Item .env.example .env
-reproduce_toxic.py
+
 
 # Logs and temp
 logs/
@@ -42,7 +39,34 @@ Thumbs.db
 
 # Docs/binaries (keep repo light; avoid leaking customer data)
 RoadMap.docx
-backend.docx
-sườn.docx
 docs/*.pdf
 docs/*.docx
+RAGEval/
+
+/models
+
+# Bổ sung gấp cho an toàn
+service_account.json
+*.pdf
+*.txt
+*.log
+*.csv
+data/rageval_*
+
+# Tuyệt mật
+service_account.json
+.env
+
+# Dữ liệu & Log
+data/*.jsonl
+data/*.xlsx
+*.log
+*.txt
+debug_*.py
+test_*.py
+verify_*.py
+
+# File rác khác
+*.pdf
+*.docx
+RAGEval/

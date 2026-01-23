@@ -20,6 +20,7 @@ def init_llm_from_env() -> None:
 
     Có thể ép provider bằng `LLM_PROVIDER`:
     - `groq` (OpenAI-compatible via `GROQ_BASE_URL`)
+    - `openai_compat` (local/remote OpenAI-compatible via `OPENAI_COMPAT_BASE_URL`)
     - `gemini`
     - `openai`
     - `none`
@@ -35,10 +36,12 @@ def init_llm_from_env() -> None:
 
     provider = (os.getenv("LLM_PROVIDER") or "").strip().lower()
     logger.info(
-        "LLM provider=%s (auto=%s) env_keys: GROQ=%s GOOGLE=%s OPENAI=%s",
+        "LLM provider=%s (auto=%s) env_keys: GROQ=%s COMPAT=%s LLAMA_CPP=%s GOOGLE=%s OPENAI=%s",
         provider or "auto",
         "yes" if not provider else "no",
         "yes" if bool(os.getenv("GROQ_API_KEY")) else "no",
+        "yes" if bool(os.getenv("OPENAI_COMPAT_BASE_URL")) else "no",
+        "yes" if bool(os.getenv("LLAMA_CPP_MODEL_PATH")) else "no",
         "yes" if bool(os.getenv("GOOGLE_API_KEY")) else "no",
         "yes" if bool(os.getenv("OPENAI_API_KEY")) else "no",
     )
@@ -48,8 +51,52 @@ def init_llm_from_env() -> None:
         logger.info("LLM is disabled by LLM_PROVIDER=none")
         return
 
+    # 1) llama-cpp-python (in-process GGUF)
+    model_path = (os.getenv("LLAMA_CPP_MODEL_PATH") or "").strip()
+    if provider in ("llama_cpp", "llama-cpp") or (not provider and model_path):
+        if not model_path:
+            raise ValueError("LLM_PROVIDER=llama_cpp nhưng thiếu LLAMA_CPP_MODEL_PATH trong .env / biến môi trường.")
+        from app.core.llama_cpp_llm import LlamaCppConfig, LlamaCppLLM
+
+        n_ctx = int(os.getenv("LLAMA_CPP_N_CTX") or "2048")
+        n_gpu_layers = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS") or "0")
+        n_threads = int(os.getenv("LLAMA_CPP_N_THREADS") or "0")
+        chat_format = (os.getenv("LLAMA_CPP_CHAT_FORMAT") or "chatml").strip()
+        verbose = (os.getenv("LLAMA_CPP_VERBOSE") or "0").strip().lower() in ("1", "true", "yes", "on")
+
+        Settings.llm = LlamaCppLLM(
+            LlamaCppConfig(
+                model_path=model_path,
+                n_ctx=n_ctx,
+                n_gpu_layers=n_gpu_layers,
+                n_threads=n_threads,
+                chat_format=chat_format,
+                verbose=verbose,
+                temperature=float(os.getenv("LLAMA_CPP_TEMPERATURE") or "0.2"),
+                max_tokens=int(os.getenv("LLAMA_CPP_MAX_TOKENS") or "1024"),
+            )
+        )
+        logger.info("Đã khởi tạo LLM llama.cpp (llama-cpp-python) với model_path=%s", model_path)
+        return
+
+    # 2) Generic OpenAI-compatible (local/remote)
+    compat_base = (os.getenv("OPENAI_COMPAT_BASE_URL") or "").strip()
+    if provider in ("openai_compat", "local_openai_compat") or (not provider and compat_base):
+        if not compat_base:
+            raise ValueError("LLM_PROVIDER=openai_compat nhưng thiếu OPENAI_COMPAT_BASE_URL trong .env / biến môi trường.")
+
+        compat_key = (os.getenv("OPENAI_COMPAT_API_KEY") or os.getenv("OPENAI_API_KEY") or "local").strip()
+        compat_model = (os.getenv("OPENAI_COMPAT_MODEL") or os.getenv("OPENAI_MODEL") or "local-model").strip()
+
+        from app.core.openai_compat_llm import OpenAICompatConfig, OpenAICompatLLM
+
+        Settings.llm = OpenAICompatLLM(OpenAICompatConfig(api_key=compat_key, base_url=compat_base, model=compat_model))
+        logger.info("Đã khởi tạo LLM OpenAI-compatible với model: %s (base_url=%s)", compat_model, compat_base)
+        return
+
+    # 3) Groq (OpenAI-compatible)
     groq_key = os.getenv("GROQ_API_KEY")
-    if provider in ("groq", "groq_openai_compat", "openai_compat") or (not provider and groq_key):
+    if provider in ("groq", "groq_openai_compat") or (not provider and groq_key):
         if not groq_key:
             raise ValueError("LLM_PROVIDER=groq nhưng thiếu GROQ_API_KEY trong .env / biến môi trường.")
 
@@ -65,6 +112,7 @@ def init_llm_from_env() -> None:
         logger.info("Đã khởi tạo LLM Groq(OpenAI-compatible) với model: %s (base_url=%s)", model, base_url)
         return
 
+    # 4) Google Gemini
     google_key = os.getenv("GOOGLE_API_KEY")
     if provider == "gemini" or (not provider and google_key):
         from llama_index.llms.google_genai import GoogleGenAI
@@ -97,6 +145,7 @@ def init_llm_from_env() -> None:
         logger.info("Đã khởi tạo LLM GoogleGenAI với model: %s", model)
         return
 
+    # 5) OpenAI
     openai_key = os.getenv("OPENAI_API_KEY")
     if provider == "openai" or (not provider and openai_key):
         from llama_index.llms.openai import OpenAI

@@ -256,17 +256,40 @@ def _result_key(r: Dict[str, object]) -> str:
 
 def _build_metadata_filters(tenant_id: str | None, branch_id: str | None):
     try:
-        from llama_index.core.vector_stores.types import ExactMatchFilter, MetadataFilters
+        from llama_index.core.vector_stores.types import ExactMatchFilter, MetadataFilters, FilterOperator, MetadataFilter
     except Exception:
         return None
-    filters = []
+    
+    filters_list = []
+    
+    # Global Knowledge Strategy:
+    # If a tenant_id is provided, we want to retrieve docs that belong to THAT tenant
+    # OR docs that belong to "global_public" (general knowledge).
     if tenant_id:
-        filters.append(ExactMatchFilter(key=TENANT_FIELD, value=tenant_id))
+        # Check if we can use FilterOperator.IN or similar if LlamaIndex supports it.
+        # Standard approach for "OR" in LlamaIndex MetadataFilters is tricky without 'condition=FilterCondition.OR'.
+        # But we need AND(branch) AND (tenant==A OR tenant==global).
+        
+        # Simplified approach: Use "FilterOperator.IN" if supported for "tenant_id".
+        # If not supported, we might need a custom Qdrant filter structure passed down, 
+        # but LlamaIndex abstraction layer prefers MetadataFilters.
+        
+        # Try usage of IN operator (works with many vector stores including Qdrant in LlamaIndex).
+        filters_list.append(
+            MetadataFilter(
+                key=TENANT_FIELD, 
+                value=[tenant_id, "global_public"], 
+                operator=FilterOperator.IN
+            )
+        )
+    
     if ENABLE_BRANCH_FILTER and branch_id:
-        filters.append(ExactMatchFilter(key=BRANCH_FIELD, value=branch_id))
-    if not filters:
+        filters_list.append(ExactMatchFilter(key=BRANCH_FIELD, value=branch_id))
+        
+    if not filters_list:
         return None
-    return MetadataFilters(filters=filters)
+        
+    return MetadataFilters(filters=filters_list)
 
 
 def _vector_retrieve(
@@ -631,7 +654,7 @@ def query_with_incontext_ralm(
         src = m.get("file_name") or m.get("file_path") or m.get("source") or "unknown"
         sources.append(str(src))
 
-    out = {"answer": answer_text, "sources": sources}
+    out = {"answer": answer_text, "sources": sources, "contexts": [str(x.get("text", "")) for x in fused]}
     if retrieval_metrics is not None:
         out["retrieval_metrics"] = retrieval_metrics
     return out

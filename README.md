@@ -112,6 +112,29 @@ GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 # Groq được gọi qua OpenAI-compatible endpoint `GROQ_BASE_URL` (cách 2).
 
+# Local/Remote OpenAI-compatible (chạy local model)
+# Ví dụ base_url:
+# - LM Studio: http://localhost:1234/v1
+# - vLLM:      http://localhost:8001/v1
+# - Ollama:    http://localhost:11434/v1 (nếu bật OpenAI-compat)
+# Dùng:
+# LLM_PROVIDER=openai_compat
+# OPENAI_COMPAT_BASE_URL=http://localhost:1234/v1
+# OPENAI_COMPAT_MODEL=your-local-model-id
+# OPENAI_COMPAT_API_KEY=local
+
+# llama-cpp-python (in-process GGUF) - load GGUF trực tiếp trong backend
+# LLM_PROVIDER=llama_cpp
+# LLAMA_CPP_MODEL_PATH=models\\qwen2.5-3b-instruct-q4_k_m.gguf
+# LLAMA_CPP_N_GPU_LAYERS=-1
+# LLAMA_CPP_N_CTX=2048
+# Optional:
+# LLAMA_CPP_CHAT_FORMAT=chatml
+# LLAMA_CPP_N_THREADS=0
+# LLAMA_CPP_TEMPERATURE=0.2
+# LLAMA_CPP_MAX_TOKENS=1024
+# LLAMA_CPP_VERBOSE=0
+
 # Optional: LlamaParse (Modern Ingestion cho PDF phức tạp)
 # LLAMA_CLOUD_API_KEY=your_llama_cloud_key_here
 
@@ -188,6 +211,7 @@ Truy cập:
 - Agent Chat (WebSocket streaming): `http://localhost:8000/agent`
 - Owner Console (login + dashboard/logs/handoffs): `http://localhost:8000/owner`
 - Admin Dashboard (Day 9): `http://localhost:8000/admin`
+- Semantic Router (trả JSON tool call hoặc text): `POST http://localhost:8000/semantic`
 - Web demo (landing + streaming chat): `http://localhost:8000/static/frontend_test.html`
 - Root mặc định sẽ redirect về Agent Chat: `http://localhost:8000/`
 - Test nhanh endpoint `/query` với body mẫu:
@@ -239,4 +263,48 @@ Các ý tưởng, roadmap và log phát triển chi tiết nằm trong:
 - `data/Log_phat_trien.docx`
 - `ROADMAP.md` (Day 1 → Day 10)
 
-Đây là nơi mô tả các giai đoạn RAG 1.0 → 2.0, hybrid, multi‑tenant và kế hoạch đánh giá. 
+Đây là nơi mô tả các giai đoạn RAG 1.0 → 2.0, hybrid, multi-tenant và kế hoạch đánh giá. 
+
+---
+
+## 8. Evaluate bằng RAGAS (tùy chọn)
+
+### 8.1 Chuẩn bị
+- Chạy Qdrant: `docker run -p 6333:6333 qdrant/qdrant`
+- Ingest dữ liệu trước khi eval (ví dụ): `python scripts/ingest.py --auto-from-filenames`
+- (Khuyến nghị) Có `DATABASE_URL` nếu dùng `--use-memory` (memory/Postgres).
+- Cài RAGAS (tùy chọn): `pip install ragas`
+
+RAGAS cần evaluator LLM. Mặc định nhiều phiên bản RAGAS dùng OpenAI env:
+- `OPENAI_API_KEY` (bắt buộc khi chạy `--run-ragas`)
+- (Tuỳ chọn) `OPENAI_BASE_URL` nếu dùng OpenAI-compatible endpoint
+
+### 8.2 Input schema
+File JSONL, mỗi dòng là 1 dict. Tối thiểu:
+- `tenant_id` (hoặc truyền `--tenant`)
+- `question`
+
+Các field tùy chọn:
+- `id`, `branch_id`, `session_id`
+- `ground_truth` (string hoặc list) để tính các metric liên quan “correctness/recall”
+- `expected_sources`, `expect_route_one_of`, `must_include` để chạy các “cheap checks”
+
+Ví dụ: `data/eval/ragas_cases.jsonl.example`
+
+### 8.3 Chạy eval
+Chỉ tạo dataset (không chạy RAGAS):
+
+```bash
+python scripts/eval_ragas.py --in data/eval/ragas_cases.jsonl.example --top-k 5
+```
+
+Chạy kèm RAGAS metrics (cần `pip install ragas` + API key hợp lệ):
+
+```bash
+python scripts/eval_ragas.py --in data/eval/ragas_cases.jsonl.example --top-k 5 --run-ragas
+```
+
+Output nằm trong `data/eval/ragas_runs/<timestamp>/`:
+- `run.jsonl` (raw: answer + contexts + checks)
+- `ragas_dataset.jsonl` (clean dataset: question/answer/contexts/ground_truth)
+- `ragas_scores.csv` + `ragas_summary.json` (nếu chạy `--run-ragas`)
