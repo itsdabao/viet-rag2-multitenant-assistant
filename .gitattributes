@@ -1,0 +1,6 @@
+* text=auto
+
+# Bash scripts must use LF to run reliably across environments.
+*.sh text eol=lf
+*.bash text eol=lf
+

@@ -1,6 +1,7 @@
 import os
 import json
 import logging
+from pathlib import Path
 import pandas as pd
 from typing import List, Dict
 from dotenv import load_dotenv
@@ -13,7 +14,9 @@ from ragas.llms import LlamaIndexLLMWrapper
 from datasets import Dataset
 
 import sys
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 # App imports
 from app.services.rag_service import rag_query
@@ -68,13 +71,13 @@ def run_evaluation():
     answer_relevancy.embeddings = ragas_embed
 
     # 2. Load Data
-    testset_path = r"d:\AI_Agent\data\testset.jsonl"
+    testset_path = os.getenv("RAGEVAL_JSONL_PATH") or str(REPO_ROOT / "evaluation" / "datasets" / "testset.jsonl")
     logger.info(f"Loading testset from {testset_path}...")
     try:
         raw_data = load_testset_jsonl(testset_path)
         logger.info(f"Loaded {len(raw_data)} samples.")
     except FileNotFoundError:
-        logger.error("Testset not found. Please run scripts/generate_testset.py first.")
+        logger.error("Testset not found. Please generate one under `evaluation/datasets/` first.")
         return
 
     # 3. Run RAG & Collect Results

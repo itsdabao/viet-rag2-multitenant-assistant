@@ -70,9 +70,9 @@ DOMAIN_KEYWORDS = [
 ]
 
 # Qdrant connection and collection
-QDRANT_HOST = "localhost"
-QDRANT_PORT = 6333
-COLLECTION_NAME = "RAG_docs"
+QDRANT_HOST = (os.getenv("QDRANT_HOST") or "localhost").strip()
+QDRANT_PORT = int((os.getenv("QDRANT_PORT") or "6333").strip())
+COLLECTION_NAME = (os.getenv("QDRANT_COLLECTION") or os.getenv("COLLECTION_NAME") or "RAG_docs").strip()
 
 # Multi-tenant / multi-branch isolation
 # NOTE:

@@ -1,4 +1,4 @@
-# Viet RAG2 Multitenant Assistant
+﻿# Viet RAG Multitenant Assistant
 
 Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Qdrant + Hybrid Retrieval (Vector + BM25) + Agentic Tools + Postgres Memory. Hệ thống hỗ trợ multi‑tenant (nhiều khách hàng), hybrid search, rerank nhẹ bằng cosine, có CLI + backend FastAPI + web demo + admin dashboard.
 
@@ -10,8 +10,7 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 - Rerank nhẹ bằng cosine để chọn top contexts tốt nhất trước khi đưa vào prompt.
 - Agentic workflow: preprocessing → routing → tool execution (tính học phí/tổng thanh toán, so sánh, tạo ticket/handoff, RAG course_search).
 - Persistent memory (Postgres): rolling summary + recent buffer + entity_memory theo session.
-- Evaluation (Day 8): golden set + cheap checks (leakage/consistency) + (optional) RAGAS.
-- Admin Dashboard (Day 9): Avg time, p95, satisfaction rate, handoff rate, logs theo tenant.
+- Admin Dashboard: Avg time, p95, satisfaction rate, handoff rate, logs theo tenant.
 
 ---
 
@@ -52,7 +51,7 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 - Vai trò: nhúng few‑shot examples phù hợp + contexts + (optional) history để “dạy” LLM trả lời đúng format, đúng scope.
 - Lợi ích: ổn định văn phong, giảm prompt engineering thủ công rời rạc.
 
-### 9) Agentic Routing + Tool‑first (Day 4–5)
+### 9) Agentic Routing + Tool‑first 
 - **Preprocessing**: language detect, toxic filter, phone extraction.
 - **Router**: quyết định route (smalltalk/out_of_domain/course_search/tuition_calculator/comparison/create_ticket) để giảm LLM call và tăng tính “business”.
 - **Tool-first**:
@@ -80,9 +79,8 @@ Trợ lý hỏi‑đáp tiếng Việt dựa trên RAG 2.0, dùng LlamaIndex + Q
 - `web/agent.html` + `web/agent.js`: Agent Chat UI (tối giản, streaming).
 - `web/owner.html` + `web/owner.js`: Owner Console UI (dashboard/logs/handoffs, login bằng env + JWT cookie).
 
-### 13) Evaluation (Day 8)
-- `scripts/eval_day8.py`: chạy golden set, cheap checks (tenant leakage, calculator consistency…), optional RAGAS.
-- `scripts/eval_discount_tool.py`: interactive tool runner + trace JSONL để debug tool behavior.
+### 13) Evaluation 
+- Thư mục `evaluation/`: gom các script/artefact evaluation (RAGAS) để dễ quản lý và tránh push nhầm dữ liệu.
 
 ---
 
@@ -98,7 +96,7 @@ Khuyến nghị tạo môi trường ảo riêng (ví dụ conda):
 Tạo file `.env` ở root:
 
 ```bash
-# Postgres (Day 6–7 memory + Day 9 dashboard)
+# Postgres 
 DATABASE_URL=postgresql+psycopg2://admin:123@localhost:5432/agent_memory
 # Hoặc dùng SQLite cho local dev (nhanh, không cần Postgres):
 # DATABASE_URL=sqlite:///./data/agent.db
@@ -107,8 +105,8 @@ DATABASE_URL=postgresql+psycopg2://admin:123@localhost:5432/agent_memory
 LLM_PROVIDER=groq
 
 # Primary (recommended): Groq (OpenAI-compatible)
-GROQ_API_KEY=gsk_your_real_key_here  # không để dấu nháy, không cắt ngắn
-GROQ_MODEL=meta-llama/llama-4-scout-17b-16e-instruct
+GROQ_API_KEY=your_groq_api_key_here  # không để dấu nháy, không cắt ngắn
+GROQ_MODEL=openai/gpt-oss-120b
 GROQ_BASE_URL=https://api.groq.com/openai/v1
 # Groq được gọi qua OpenAI-compatible endpoint `GROQ_BASE_URL` (cách 2).
 
@@ -273,11 +271,10 @@ Các ý tưởng, roadmap và log phát triển chi tiết nằm trong:
 - Chạy Qdrant: `docker run -p 6333:6333 qdrant/qdrant`
 - Ingest dữ liệu trước khi eval (ví dụ): `python scripts/ingest.py --auto-from-filenames`
 - (Khuyến nghị) Có `DATABASE_URL` nếu dùng `--use-memory` (memory/Postgres).
-- Cài RAGAS (tùy chọn): `pip install ragas`
+- Chạy script RAGAS trong thư mục `evaluation/` (khuyến nghị dùng conda env `agent`).
 
-RAGAS cần evaluator LLM. Mặc định nhiều phiên bản RAGAS dùng OpenAI env:
-- `OPENAI_API_KEY` (bắt buộc khi chạy `--run-ragas`)
-- (Tuỳ chọn) `OPENAI_BASE_URL` nếu dùng OpenAI-compatible endpoint
+RAGAS cần evaluator LLM. Repo cấu hình ưu tiên Groq qua env:
+- `GROQ_API_KEY`, `GROQ_BASE_URL`, `GROQ_MODEL` (ví dụ `openai/gpt-oss-120b`)
 
 ### 8.2 Input schema
 File JSONL, mỗi dòng là 1 dict. Tối thiểu:
@@ -292,19 +289,4 @@ Các field tùy chọn:
 Ví dụ: `data/eval/ragas_cases.jsonl.example`
 
 ### 8.3 Chạy eval
-Chỉ tạo dataset (không chạy RAGAS):
-
-```bash
-python scripts/eval_ragas.py --in data/eval/ragas_cases.jsonl.example --top-k 5
-```
-
-Chạy kèm RAGAS metrics (cần `pip install ragas` + API key hợp lệ):
-
-```bash
-python scripts/eval_ragas.py --in data/eval/ragas_cases.jsonl.example --top-k 5 --run-ragas
-```
-
-Output nằm trong `data/eval/ragas_runs/<timestamp>/`:
-- `run.jsonl` (raw: answer + contexts + checks)
-- `ragas_dataset.jsonl` (clean dataset: question/answer/contexts/ground_truth)
-- `ragas_scores.csv` + `ragas_summary.json` (nếu chạy `--run-ragas`)
+Xem hướng dẫn và chạy script tại `evaluation/README.md`.

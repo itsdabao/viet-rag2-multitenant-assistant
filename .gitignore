@@ -1,72 +1,57 @@
-# Python caches
+﻿### Python
 __pycache__/
-*.pyc
+*.py[cod]
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
 
-# Environments
+### Virtual envs
 .venv/
 venv/
 
-# Secrets
+### Secrets
 .env
+.env.*
+!.env.example
+service_account.json
 
-
-# Logs and temp
-logs/
-tmp/
-
-# Data caches
-data/.cache/
-
-# Raw tenant data (do not commit)
-data/knowledge_base/*
-!data/knowledge_base/.gitkeep
-data/*.pdf
-data/*.docx
-data/*.jpg
-data/*.png
-data/*.xlsx
-
-# Jupyter
-notebooks/
-.ipynb_checkpoints/
-
-# OS/filesystem
+### OS / editor
 .DS_Store
 Thumbs.db
-
-# Office temp files
 ~$*
 
-# Docs/binaries (keep repo light; avoid leaking customer data)
-RoadMap.docx
-docs/*.pdf
-docs/*.docx
-RAGEval/
-
-/models
-
-# Bổ sung gấp cho an toàn
-service_account.json
-*.pdf
-*.txt
+### Logs / temp
+logs/
+tmp/
 *.log
-*.csv
-data/rageval_*
 
-# Tuyệt mật
-service_account.json
-.env
+### Data (customer / generated)
+data/.cache/
+data/knowledge_base/**
+!data/knowledge_base/.gitkeep
+data/**/*.pdf
+data/**/*.docx
+data/**/*.xlsx
+data/**/*.png
+data/**/*.jpg
+data/**/*.jsonl
+data/**/*.csv
 
-# Dữ liệu & Log
-data/*.jsonl
-data/*.xlsx
-*.log
-*.txt
-debug_*.py
-test_*.py
-verify_*.py
+### Models (large)
+models/
 
-# File rác khác
-*.pdf
-*.docx
-RAGEval/
+### Evaluation artifacts (keep local)
+evaluation/**/.venv/
+evaluation/**/result/
+evaluation/**/intermediate_result/
+evaluation/datasets/**
+!evaluation/datasets/.gitkeep
+
+### Local git workaround (Windows ACL)
+.git2/
+.git_block_test/
+.git_acl*.txt
